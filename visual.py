@@ -11,30 +11,47 @@ from model import Encoder, Decoder
 parser = argparse.ArgumentParser()
 # Model related arguments
 parser.add_argument('--encoder', default='ckpt/pre_encoder.pth',
-                    help='path to load model')
+                    help='path to load model.')
 parser.add_argument('--edg_decoder', default='ckpt/pre_edg_decoder.pth',
-                    help='path to load model')
+                    help='path to load model.')
 parser.add_argument('--cor_decoder', default='ckpt/pre_cor_decoder.pth',
-                    help='path to load model')
+                    help='path to load model.')
 parser.add_argument('--device', default='cuda:0',
-                    help='device to run models')
+                    help='device to run models.')
 # I/O related arguments
 parser.add_argument('--img_glob', required=True,
-                    help='Note: Remeber to quote your glob path')
+                    help='NOTE: Remeber to quote your glob path.')
 parser.add_argument('--line_glob', required=True,
-                    help='shold have the same number of files as img_glob'
-                         'two list with same index are load as input channels'
-                         'Note: Remeber to quote your glob path')
+                    help='shold have the same number of files as img_glob. '
+                         'two list with same index are load as input channels. '
+                         'NOTE: Remeber to quote your glob path.')
 parser.add_argument('--output_dir', required=True)
 # Data augmented arguments (to improve output quality)
 parser.add_argument('--flip', action='store_true',
-                    help='Whether to perfome left-right flip'
-                         '# of input x2')
+                    help='whether to perfome left-right flip. '
+                         '# of input x2.')
+parser.add_argument('--rotate', nargs='*', default=[], type=float,
+                    help='whether to perfome horizontal rotate. '
+                         'each elements indicate fraction of image width. '
+                         '# of input xlen(rotate).')
 # Visualization related arguments
 parser.add_argument('--alpha', default=0.8,
-                    help='Weight to composite output with origin rgb image')
+                    help='weight to composite output with origin rgb image.')
 args = parser.parse_args()
 device = torch.device(args.device)
+
+# Check input arguments validation
+assert os.path.isfile(args.encoder), 'encoder weight not found'
+assert os.path.isfile(args.edg_decoder), 'edg_decoder weight not found'
+assert os.path.isfile(args.cor_decoder), 'cor_decoder weight not found'
+for path in glob.glob(args.img_glob):
+    assert os.path.isfile(path), '%s not found' % path
+for path in glob.glob(args.line_glob):
+    assert os.path.isfile(path), '%s not found' % path
+assert os.path.isdir(args.output_dir), '%s is not a directory' % args.output_dir
+assert 0 <= args.alpha and args.alpha <= 1, '--arpha should in [0, 1]'
+for rotate in args.rotate:
+    assert 0 <= rotate and rotate <= 1, 'elements in --rotate should in [0, 1]'
 
 
 # Prepare model
