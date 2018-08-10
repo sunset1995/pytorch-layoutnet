@@ -63,7 +63,7 @@ class PanoDataset(data.Dataset):
         npimg_list = [
             np.expand_dims(npimg, axis=0) if npimg.ndim == 2 else npimg.transpose([2, 0, 1])
             for npimg in npimg_list]
-        return (torch.FloatTensor(npimg) for npimg in npimg_list)
+        return tuple(torch.FloatTensor(npimg) for npimg in npimg_list)
 
 
 if __name__ == '__main__':
