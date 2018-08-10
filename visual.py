@@ -75,6 +75,10 @@ def augment(x_img):
     if args.flip:
         aug_type.append('flip')
         x_imgs_augmented.append(np.flip(x_img, axis=-1))
+    for rotate in args.rotate:
+        shift = int(round(rotate * x_img.shape[-1]))
+        aug_type.append('rotate %d' % shift)
+        x_imgs_augmented.append(np.roll(x_img, shift, axis=-1))
     return np.array(x_imgs_augmented), aug_type
 
 
@@ -83,6 +87,9 @@ def augment_undo(x_imgs_augmented, aug_type):
     for x_img, aug in zip(x_imgs_augmented, aug_type):
         if aug == 'flip':
             x_imgs.append(np.flip(x_img, axis=-1))
+        elif aug.startswith('rotate'):
+            shift = int(aug.split()[-1])
+            x_imgs.append(np.roll(x_img, -shift, axis=-1))
         elif aug == '':
             x_imgs.append(x_img)
         else:
