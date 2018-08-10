@@ -9,10 +9,14 @@ from torch import optim
 from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
-from utils import group_weight, adjust_learning_rate
+from utils import group_weight, adjust_learning_rate, Statistic
 
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--id', required=True,
+                    help='experiment id to name checkpoints')
+parser.add_argument('--ckpt', default='./ckpt',
+                    help='folder to output checkpoints')
 # Dataset related arguments
 parser.add_argument('--root_dir_train', default='data/train')
 parser.add_argument('--root_dir_valid', default='data/valid')
@@ -22,11 +26,11 @@ parser.add_argument('--no_rotate', action='store_true',
                     help='disable horizontal rotate augmentation')
 parser.add_argument('--num_workers', default=6, type=int)
 # optimization related arguments
-parser.add_argument('--batch_size_train', default=20, type=int,
+parser.add_argument('--batch_size_train', default=2, type=int,
                     help='training mini-batch size')
-parser.add_argument('--batch_size_valid', default=20, type=int,
+parser.add_argument('--batch_size_valid', default=2, type=int,
                     help='validation mini-batch size')
-parser.add_argument('--epochs', default=50, type=int,
+parser.add_argument('--epochs', default=30, type=int,
                     help='epochs to train')
 parser.add_argument('--optim', default='SGD')
 parser.add_argument('--lr', default=0.01831563889, type=float)
@@ -41,14 +45,13 @@ parser.add_argument('--weight_decay', default=1e-4, type=float)
 parser.add_argument('--no_cuda', action='store_true',
                     help='disable cuda')
 parser.add_argument('--seed', default=277, type=int, help='manual seed')
-parser.add_argument('--ckpt', default='./ckpt',
-                    help='folder to output checkpoints')
 parser.add_argument('--disp_iter', type=int, default=20,
                     help='frequency to display')
 args = parser.parse_args()
 device = torch.device('cpu' if args.no_cuda else 'cuda')
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
+os.makedirs(os.path.join(args.ckpt, args.id), exist_ok=True)
 
 
 # Create dataloader
@@ -92,7 +95,14 @@ args.warmup_iters = args.warmup_epochs * len(loader_train)
 args.max_iters = args.epochs * len(loader_train)
 args.running_lr = args.warmup_lr if args.warmup_epochs > 0 else args.lr
 args.cur_iter = 0
+edg_run_loss = Statistic(winsz=100)
+cor_run_loss = Statistic(winsz=100)
 criti = nn.BCEWithLogitsLoss(reduction='none')
+
+print(args)
+print('%d iters per epoch for train' % len(loader_train))
+print('%d iters per epoch for valid' % len(loader_valid))
+print(' start training '.center(80, '='))
 
 
 # Start training
@@ -131,6 +141,50 @@ for ith_epoch in range(1, args.epochs + 1):
             3.0, norm_type='inf')
         optimizer.step()
 
-        print('epoch %d iter %d | lr %.6f | edg loss %.6f | cor loss %.6f' % (
-            ith_epoch, args.cur_iter, args.running_lr, loss_edg.item(), loss_cor.item()),
-            flush=True)
+        # Statitical result
+        edg_run_loss.update(loss_edg.item())
+        cor_run_loss.update(loss_cor.item())
+        if args.cur_iter % args.disp_iter == 0:
+            print('iter %d (epoch %d) | lr %.6f | edg loss %.6f | cor loss %.6f' % (
+                args.cur_iter, ith_epoch, args.running_lr, edg_run_loss, cor_run_loss),
+                flush=True)
+
+    # Dump model
+    torch.save(encoder.state_dict(),
+               os.path.join(args.ckpt, args.id, 'epoch_%d_encoder.pth' % ith_epoch))
+    torch.save(edg_decoder.state_dict(),
+               os.path.join(args.ckpt, args.id, 'epoch_%d_edg_decoder.pth' % ith_epoch))
+    torch.save(cor_decoder.state_dict(),
+               os.path.join(args.ckpt, args.id, 'epoch_%d_cor_decoder.pth' % ith_epoch))
+    print('model saved')
+
+    # Validate
+    valid_edg_loss = Statistic()
+    valid_cor_loss = Statistic()
+    for ith_batch, datas in enumerate(loader_valid):
+        with torch.no_grad():
+            # Prepare data
+            x = torch.cat([datas[0], datas[1]], dim=1).to(device)
+            y_edg = datas[2].to(device)
+            y_cor = datas[3].to(device)
+
+            # Feedforward
+            en_list = encoder(x)
+            edg_de_list = edg_decoder(en_list[::-1])
+            cor_de_list = cor_decoder(en_list[-1:] + edg_de_list[:-1])
+            y_edg_ = edg_de_list[-1]
+            y_cor_ = cor_de_list[-1]
+
+            # Compute loss
+            loss_edg = criti(y_edg_, y_edg)
+            loss_edg[y_edg == 0.] *= 0.2
+            loss_edg = loss_edg.mean()
+            loss_cor = criti(y_cor_, y_cor)
+            loss_cor[y_cor == 0.] *= 0.2
+            loss_cor = loss_cor.mean()
+
+            valid_edg_loss.update(loss_edg.item(), x.size(0))
+            valid_cor_loss.update(loss_cor.item(), x.size(0))
+    print('validation | epoch %d | edg loss %.6f | cor loss %.6f' % (
+        ith_epoch, valid_edg_loss, valid_cor_loss),
+        flush=True)
