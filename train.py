@@ -12,7 +12,7 @@ from dataset import PanoDataset
 from utils import group_weight, adjust_learning_rate, Statistic
 
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--id', required=True,
                     help='experiment id to name checkpoints')
 parser.add_argument('--ckpt', default='./ckpt',
@@ -46,6 +46,8 @@ parser.add_argument('--no_cuda', action='store_true',
                     help='disable cuda')
 parser.add_argument('--seed', default=277, type=int, help='manual seed')
 parser.add_argument('--disp_iter', type=int, default=20,
+                    help='frequency to display')
+parser.add_argument('--save_every', type=int, default=5,
                     help='frequency to display')
 args = parser.parse_args()
 device = torch.device('cpu' if args.no_cuda else 'cuda')
@@ -150,13 +152,14 @@ for ith_epoch in range(1, args.epochs + 1):
                 flush=True)
 
     # Dump model
-    torch.save(encoder.state_dict(),
-               os.path.join(args.ckpt, args.id, 'epoch_%d_encoder.pth' % ith_epoch))
-    torch.save(edg_decoder.state_dict(),
-               os.path.join(args.ckpt, args.id, 'epoch_%d_edg_decoder.pth' % ith_epoch))
-    torch.save(cor_decoder.state_dict(),
-               os.path.join(args.ckpt, args.id, 'epoch_%d_cor_decoder.pth' % ith_epoch))
-    print('model saved')
+    if ith_epoch % args.save_every == 0:
+        torch.save(encoder.state_dict(),
+                   os.path.join(args.ckpt, args.id, 'epoch_%d_encoder.pth' % ith_epoch))
+        torch.save(edg_decoder.state_dict(),
+                   os.path.join(args.ckpt, args.id, 'epoch_%d_edg_decoder.pth' % ith_epoch))
+        torch.save(cor_decoder.state_dict(),
+                   os.path.join(args.ckpt, args.id, 'epoch_%d_cor_decoder.pth' % ith_epoch))
+        print('model saved')
 
     # Validate
     valid_edg_loss = Statistic()
