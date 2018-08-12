@@ -23,13 +23,14 @@ class PanoDataset(data.Dataset):
     @rotate (bool)
         whether to performe random horizontal angle rotate
     '''
-    def __init__(self, root_dir, cat_list, flip=False, rotate=False):
+    def __init__(self, root_dir, cat_list, flip=False, rotate=False, return_filenames=False):
         self.root_dir = root_dir
         self.cat_list = cat_list
         self.fnames = [
             fname for fname in os.listdir(os.path.join(root_dir, cat_list[0]))]
         self.flip = flip
         self.rotate = rotate
+        self.return_filenames = return_filenames
 
         self._check_dataset()
 
@@ -63,6 +64,10 @@ class PanoDataset(data.Dataset):
         npimg_list = [
             np.expand_dims(npimg, axis=0) if npimg.ndim == 2 else npimg.transpose([2, 0, 1])
             for npimg in npimg_list]
+
+        if self.return_filenames:
+            return tuple(torch.FloatTensor(npimg) for npimg in npimg_list) + \
+                (self.fnames[idx], )
         return tuple(torch.FloatTensor(npimg) for npimg in npimg_list)
 
 
