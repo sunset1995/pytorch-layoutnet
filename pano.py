@@ -129,10 +129,13 @@ def lineFromTwoPoint(pt1, pt2):
     return lines
 
 
-def paintParameterLine2(parameterLine, width, height, img, c):
+def paintParameterLine2(parameterLine, width, height, img=None, c=1):
     lines = np.copy(parameterLine)
-    panoEdgeC = img.astype(np.float64)
-    assert img.shape[0] == height and img.shape[1] == width
+    if img is None:
+        panoEdgeC = np.zeros((height, width, 3), np.float64)
+    else:
+        panoEdgeC = img.astype(np.float64)
+        assert img.shape[0] == height and img.shape[1] == width
 
     num_sample = max(height, width)
 
