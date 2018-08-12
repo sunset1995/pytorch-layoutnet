@@ -83,8 +83,8 @@ for ith, datas in enumerate(loader):
         loss_cor[y_cor == 0.] *= 0.2
         loss_cor = loss_cor.mean().item()
 
-        edg_p_map = torch.sigmoid(y_edg).cpu().numpy()
-        cor_p_map = torch.sigmoid(y_cor).cpu().numpy()
+        edg_p_map = torch.sigmoid(y_edg_).cpu().numpy()
+        cor_p_map = torch.sigmoid(y_cor_).cpu().numpy()
         for i in range(b_sz):
             edg_src = edg_p_map[i].transpose([1, 2, 0]) * 255
             cor_src = cor_p_map[i, 0] * 255
