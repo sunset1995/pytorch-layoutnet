@@ -6,16 +6,13 @@ from PIL import Image
 
 import torch
 from model import Encoder, Decoder
+from pano import draw_boundary
 
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 # Model related arguments
-parser.add_argument('--encoder', default='ckpt/pre_encoder.pth',
-                    help='path to load model.')
-parser.add_argument('--edg_decoder', default='ckpt/pre_edg_decoder.pth',
-                    help='path to load model.')
-parser.add_argument('--cor_decoder', default='ckpt/pre_cor_decoder.pth',
-                    help='path to load model.')
+parser.add_argument('--path_prefix', default='ckpt/pre',
+                    help='prefix path to load model.')
 parser.add_argument('--device', default='cuda:0',
                     help='device to run models.')
 # I/O related arguments
@@ -35,15 +32,12 @@ parser.add_argument('--rotate', nargs='*', default=[], type=float,
                          'each elements indicate fraction of image width. '
                          '# of input xlen(rotate).')
 # Visualization related arguments
-parser.add_argument('--alpha', default=0.8,
+parser.add_argument('--alpha', default=0.8, type=float,
                     help='weight to composite output with origin rgb image.')
 args = parser.parse_args()
 device = torch.device(args.device)
 
 # Check input arguments validation
-assert os.path.isfile(args.encoder), 'encoder weight not found'
-assert os.path.isfile(args.edg_decoder), 'edg_decoder weight not found'
-assert os.path.isfile(args.cor_decoder), 'cor_decoder weight not found'
 for path in glob.glob(args.img_glob):
     assert os.path.isfile(path), '%s not found' % path
 for path in glob.glob(args.line_glob):
@@ -58,9 +52,9 @@ for rotate in args.rotate:
 encoder = Encoder().to(device)
 edg_decoder = Decoder(skip_num=2, out_planes=3).to(device)
 cor_decoder = Decoder(skip_num=3, out_planes=1).to(device)
-encoder.load_state_dict(torch.load(args.encoder))
-edg_decoder.load_state_dict(torch.load(args.edg_decoder))
-cor_decoder.load_state_dict(torch.load(args.cor_decoder))
+encoder.load_state_dict(torch.load('%s_encoder.pth' % args.path_prefix))
+edg_decoder.load_state_dict(torch.load('%s_edg_decoder.pth' % args.path_prefix))
+cor_decoder.load_state_dict(torch.load('%s_cor_decoder.pth' % args.path_prefix))
 
 
 # Load path to visualization
@@ -130,13 +124,20 @@ for i_path, l_path in zip(img_paths, line_paths):
         edg_img = edg_img.transpose([0, 2, 3, 1]).mean(0)
         cor_img = cor_img.transpose([0, 2, 3, 1]).mean(0)
 
+    # Generate boundary image
+    bon_img = draw_boundary(edg_img * 255,
+                            cor_img[..., 0] * 255,
+                            i_img * 255)
+
     # Composite output image with rgb image
     edg_img = args.alpha * edg_img + (1 - args.alpha) * i_img
     cor_img = args.alpha * cor_img + (1 - args.alpha) * i_img
 
     # Dump result
     basename = os.path.splitext(os.path.basename(i_path))[0]
-    edg_path = os.path.join(args.output_dir, '%sedg.png' % basename)
-    cor_path = os.path.join(args.output_dir, '%scor.png' % basename)
+    edg_path = os.path.join(args.output_dir, '%s_edg.png' % basename)
+    cor_path = os.path.join(args.output_dir, '%s_cor.png' % basename)
+    bon_path = os.path.join(args.output_dir, '%s_bon.png' % basename)
     Image.fromarray((edg_img * 255).astype(np.uint8)).save(edg_path)
     Image.fromarray((cor_img * 255).astype(np.uint8)).save(cor_path)
+    Image.fromarray(bon_img).save(bon_path)
