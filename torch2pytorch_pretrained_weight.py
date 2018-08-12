@@ -6,8 +6,9 @@ import torch
 from model import Encoder, Decoder
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--torch_pretrained', default='ckpt/panofull_lay_pretrained.t7')
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--torch_pretrained', default='ckpt/panofull_lay_pretrained.t7',
+                    help='path to load pretrained .t7 file')
 parser.add_argument('--encoder', default='ckpt/pre_encoder.pth',
                     help='dump path. skip if not given')
 parser.add_argument('--edg_decoder', default='ckpt/pre_edg_decoder.pth',
@@ -40,7 +41,9 @@ if args.cor_decoder:
         total_parameter += np.prod(p.size())
 print('pytorch model parameters num:', total_parameter)
 
-assert torch_pretrained.shape[0] == total_parameter, '# of parameters mismatched'
+assert torch_pretrained.shape[0] >= total_parameter, 'not enough weight to load'
+if torch_pretrained.shape[0] > total_parameter:
+    print('Note: fewer parameters then pretrained weights !!!')
 
 
 # Coping parameters
@@ -65,6 +68,5 @@ if args.edg_decoder:
 if args.cor_decoder:
     idx = copy_params(idx, cor_decoder.parameters())
     torch.save(cor_decoder.state_dict(), args.cor_decoder)
-assert idx == torch_pretrained.shape[0], 'copy pointer stop too early'
 
 print('\nAll thing well done')
