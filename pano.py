@@ -3,29 +3,35 @@ Reimplement post optimization code from https://github.com/zouchuhang/LayoutNet
 '''
 import numpy as np
 import numpy.matlib as matlib
-from scipy.signal import find_peaks
+import scipy.signal
 
 
-def getIniCor(cor_m, corn, edg_m, im_h):
-    locs_c, _ = find_peaks(cor_m, prominence=58, distance=20)
-    pks_c = cor_m[locs_c]
-    pk_id_c = np.argsort(-pks_c)
-    pk_loc_c = locs_c[pk_id_c[:min(4, pks_c.size)]]
-    pk_loc_c = np.sort(pk_loc_c)
-    if pk_loc_c.size < 4:
-        pk_loc_c = [1, *pk_loc_c]
-    locs, _ = find_peaks(edg_m, prominence=20, distance=20)
-    pks = edg_m[locs]
+def find_4peaks(signal, prominence, distance):
+    locs, _ = scipy.signal.find_peaks(signal,
+                                      prominence=prominence,
+                                      distance=distance)
+    pks = signal[locs]
     pk_id = np.argsort(-pks)
-    pk_loc = locs[pk_id[:min(4, pks.size)]]
+    pk_loc = locs[pk_id[:min(4, len(pks))]]
     pk_loc = np.sort(pk_loc)
+    return pk_loc, signal[pk_loc]
+
+
+def getIniCor(cor_m, corn, im_h):
+    cor_prominence = 58
+    pk_loc_c, _ = find_4peaks(cor_m, prominence=cor_prominence, distance=20)
+    while len(pk_loc_c) < 4 and cor_prominence > 10:
+        cor_prominence = cor_prominence * 0.9
+        pk_loc_c, _ = find_4peaks(cor_m, prominence=cor_prominence, distance=20)
+    while len(pk_loc_c) < 4:
+        pk_loc_c = np.array([1, *pk_loc_c])
 
     cor_id = []
     for j in range(4):
-        locs_t, _ = find_peaks(corn[:, pk_loc_c[j]], prominence=50, distance=20)
+        locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=50, distance=20)
         pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
         if pks_t.size < 2:
-            locs_t, _ = find_peaks(corn[:, pk_loc_c[j]], prominence=5, distance=20)
+            locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=5, distance=20)
             pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
         if pks_t.size < 2:
             locs_t = np.array([im_h / 2, im_h / 2])
@@ -37,7 +43,7 @@ def getIniCor(cor_m, corn, edg_m, im_h):
         cor_id.append([pk_loc_c[j], pk_loc_t[1]])
     cor_id = np.array(cor_id)
 
-    return cor_id, pks, pk_loc
+    return cor_id
 
 
 def coords2uv(coords, width, height):
@@ -91,7 +97,7 @@ def computeUVN(n, in_, planeID):
         n = np.array([n[2], n[0], n[1]])
     bc = n[0] * np.sin(in_) + n[1] * np.cos(in_)
     bs = n[2]
-    out = np.arctan(-bc / bs)
+    out = np.arctan(-bc / (bs + 1e-9))
     return out
 
 
@@ -108,7 +114,7 @@ def lineFromTwoPoint(pt1, pt2):
     numLine = pt1.shape[0]
     lines = np.zeros((numLine, 6))
     n = np.cross(pt1, pt2)
-    n = n / matlib.repmat(np.sqrt(np.sum(n ** 2, 1, keepdims=1)), 1, 3)
+    n = n / (matlib.repmat(np.sqrt(np.sum(n ** 2, 1, keepdims=1)), 1, 3) + 1e-9)
     lines[:, 0:3] = n
 
     areaXY = np.abs(np.sum(n * matlib.repmat([0, 0, 1], numLine, 1), 1, keepdims=True))
@@ -167,7 +173,7 @@ def get_cor_id(edg_src, cor_src):
     '''
     @edg_src (numpy array H x W x 3, [0, 255])
         model output edge probability map
-    @cor_src (numpy array H x W x 1, [0, 255])
+    @cor_src (numpy array H x W, [0, 255])
         model output corner probability map
 
     Return: list of 2d cordinates of corners
@@ -179,7 +185,7 @@ def get_cor_id(edg_src, cor_src):
     cor_m = cor.max(0)
 
     im_h, im_w = edg.shape
-    cor_id, _, _ = getIniCor(cor_m, cor, edg_m, im_h)
+    cor_id = getIniCor(cor_m, cor, im_h)
 
     return cor_id
 
