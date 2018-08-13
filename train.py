@@ -18,13 +18,20 @@ parser.add_argument('--id', required=True,
 parser.add_argument('--ckpt', default='./ckpt',
                     help='folder to output checkpoints')
 # Dataset related arguments
-parser.add_argument('--root_dir_train', default='data/train')
-parser.add_argument('--root_dir_valid', default='data/valid')
+parser.add_argument('--root_dir_train', default='data/train',
+                    help='root directory for training data')
+parser.add_argument('--root_dir_valid', default='data/valid',
+                    help='root directory for validation data')
+parser.add_argument('--input_cat', default=['img', 'line'], nargs='+',
+                    help='input channels subdirectories')
+parser.add_argument('--input_channels', default=6, type=int,
+                    help='numbers of input channels')
 parser.add_argument('--no_flip', action='store_true',
                     help='disable left-right flip augmentation')
 parser.add_argument('--no_rotate', action='store_true',
                     help='disable horizontal rotate augmentation')
-parser.add_argument('--num_workers', default=6, type=int)
+parser.add_argument('--num_workers', default=6, type=int,
+                    help='numbers of workers for dataloaders')
 # optimization related arguments
 parser.add_argument('--batch_size_train', default=2, type=int,
                     help='training mini-batch size')
@@ -32,23 +39,29 @@ parser.add_argument('--batch_size_valid', default=2, type=int,
                     help='validation mini-batch size')
 parser.add_argument('--epochs', default=30, type=int,
                     help='epochs to train')
-parser.add_argument('--optim', default='SGD')
-parser.add_argument('--lr', default=0.01831563889, type=float)
+parser.add_argument('--optim', default='SGD',
+                    help='optimizer to use. only support SGD and Adam')
+parser.add_argument('--lr', default=0.01831563889, type=float,
+                    help='learning rate')
 parser.add_argument('--lr_pow', default=0.9, type=float,
                     help='power in poly to drop LR')
-parser.add_argument('--warmup_lr', default=1e-6, type=float)
-parser.add_argument('--warmup_epochs', default=5, type=int)
+parser.add_argument('--warmup_lr', default=1e-6, type=float,
+                    help='starting learning rate for warm up')
+parser.add_argument('--warmup_epochs', default=5, type=int,
+                    help='numbers of warmup epochs')
 parser.add_argument('--beta1', default=0.9, type=float,
                     help='momentum for sgd, beta1 for adam')
-parser.add_argument('--weight_decay', default=1e-4, type=float)
+parser.add_argument('--weight_decay', default=1e-4, type=float,
+                    help='factor for L2 regularization')
 # Misc arguments
 parser.add_argument('--no_cuda', action='store_true',
                     help='disable cuda')
-parser.add_argument('--seed', default=277, type=int, help='manual seed')
+parser.add_argument('--seed', default=277, type=int,
+                    help='manual seed')
 parser.add_argument('--disp_iter', type=int, default=20,
-                    help='frequency to display')
+                    help='iterations frequency to display')
 parser.add_argument('--save_every', type=int, default=5,
-                    help='frequency to display')
+                    help='epochs frequency to save state_dict')
 args = parser.parse_args()
 device = torch.device('cpu' if args.no_cuda else 'cuda')
 np.random.seed(args.seed)
@@ -58,10 +71,10 @@ os.makedirs(os.path.join(args.ckpt, args.id), exist_ok=True)
 
 # Create dataloader
 dataset_train = PanoDataset(root_dir=args.root_dir_train,
-                            cat_list=['img', 'line', 'edge', 'cor'],
+                            cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=not args.no_flip, rotate=not args.no_rotate)
 dataset_valid = PanoDataset(root_dir=args.root_dir_valid,
-                            cat_list=['img', 'line', 'edge', 'cor'],
+                            cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=False, rotate=False)
 loader_train = DataLoader(dataset_train, args.batch_size_train,
                           shuffle=True, drop_last=True,
@@ -74,7 +87,7 @@ loader_valid = DataLoader(dataset_valid, args.batch_size_valid,
 
 
 # Create model
-encoder = Encoder().to(device)
+encoder = Encoder(args.input_channels).to(device)
 edg_decoder = Decoder(skip_num=2, out_planes=3).to(device)
 cor_decoder = Decoder(skip_num=3, out_planes=1).to(device)
 
@@ -115,9 +128,10 @@ for ith_epoch in range(1, args.epochs + 1):
         args.cur_iter += 1
 
         # Prepare data
-        x = torch.cat([datas[0], datas[1]], dim=1).to(device)
-        y_edg = datas[2].to(device)
-        y_cor = datas[3].to(device)
+        x = torch.cat([datas[i]
+                      for i in range(len(args.input_cat))], dim=1).to(device)
+        y_edg = datas[-2].to(device)
+        y_cor = datas[-1].to(device)
 
         # Feedforward
         en_list = encoder(x)
