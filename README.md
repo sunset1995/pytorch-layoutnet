@@ -22,9 +22,25 @@ Currently only joint bounday branch and corner branch are implemented, 3d layout
     /panofull_*_pretrained.t7  (download and extract from official)
 ```
 - Execute `python torch2pytorch_data.py` to convert `data/origin/**/*` to `data/train`, `data/valid` and `data/test` for pytorch data loader. Under these folder `img/` contains all raw rgb `.png` while `line/`, `edge/`, `cor/` contain preprocessed edge detection result, ground truth boundary and ground truth corner respectively.
-- Use `torch2pytorch_pretrained_weight.py` to convert official pretrained pano model to `encoder`, `edg_decoder`, `cor_decoder` pytorch `state_dict` (see `python torch2pytorch_pretrained_weight.py -h` for more detailed). example:
-  - `python torch2pytorch_pretrained_weight.py --torch_pretrained ckpt/panofull_joint_box_pretrained.t7 --encoder ckpt/pre_full_encoder.pth --edg_decoder ckpt/pre_full_edg_decoder.pth --cor_decoder ckpt/pre_full_cor_decoder.pth` to convert pretrained pano full models into 3 `state_dict`s with 3d layout regressor branch ignored.
+- Use `torch2pytorch_pretrained_weight.py` to convert official pretrained pano model to `encoder`, `edg_decoder`, `cor_decoder` pytorch `state_dict` (see `python torch2pytorch_pretrained_weight.py -h` for more detailed). examples:
+  - to convert layout pretrained only
+    ```
+    python torch2pytorch_pretrained_weight.py --torch_pretrained ckpt/panofull_joint_box_pretrained.t7 --encoder ckpt/pre_full_encoder.pth --edg_decoder ckpt/pre_full_edg_decoder.pth --cor_decoder ckpt/pre_full_cor_decoder.pth
+    ```
+  - to convert full pretrained (layout regressor branch  will be ignored)
+    ```
+    python torch2pytorch_pretrained_weight.py --torch_pretrained ckpt/panofull_joint_box_pretrained.t7 --encoder ckpt/pre_full_encoder.pth --edg_decoder ckpt/pre_full_edg_decoder.pth --cor_decoder ckpt/pre_full_cor_decoder.pth
+    ```
 
 ## Visualization
+See `python visual.py -h` for detailed arguments explaination. Basically, `--path_prefix` give the prefix path to 3 `state_dict` to load, `--img_glob` and `--line_glob` tell the input channels of rgb and line (remember to add quotes if you use wildcards like `*` in your glob path). Finally `--output_dir` specify the directory to dump the results.  
+Execute below command to get the same output as demos.  
+```python visual.py --img_glob "data/test/img/pano_aaccxxpwmsdgvj.png" --line_glob "data/test/line/pano_aaccxxpwmsdgvj.png" --output_dir assert/```
+- output boudary probability map, suffix with `_bon.png`
+  ![demo boundary](assert/pano_aaccxxpwmsdgvj_bon.png)
+- output corner probability map, suffix with `_cor.png`
+  ![demo corner](assert/pano_aaccxxpwmsdgvj_cor.png)
+- output boundary, suffix with `_edg.png`
+  ![demo edge](assert/pano_aaccxxpwmsdgvj_edg.png)
 
 ## Training and Evaluation
