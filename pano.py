@@ -34,7 +34,7 @@ def getIniCor(cor_m, corn, im_h):
             locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=5, distance=20)
             pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
         if pks_t.size < 2:
-            locs_t = np.array([im_h / 2, im_h / 2])
+            locs_t = np.array([int(im_h / 3), int(im_h * 2 / 3)])
             pks_t = np.array([0, 0])
         pk_id_t = np.argsort(-pks_t)
         pk_loc_t = locs_t[pk_id_t[:min(2, pks_t.size)]]
