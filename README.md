@@ -43,4 +43,27 @@ Execute below command to get the same output as demos.
 - output boundary, suffix with `_bon.png`
   ![demo boundary](assert/pano_aaccxxpwmsdgvj_bon.png)
 
-## Training and Evaluation
+## Training
+See `python train.py -h` and `python valid.py -h` for detailed arguments explanation.  
+**Note** that the default training strategy is different from official. The default optimizer is `SGD` with momentume. Learning rate schedule is warmup + poly decay.  
+To launch experiments as official "corner+boundary" setting (`--id` is used to identified the experiment and can be named youself):
+```
+python train.py --id exp_cor_bou
+```
+To train only using RGB channels:  
+```
+python train.py --id exp_rgb --input_cat img --input_channels 3
+```
+
+## Evaluation
+To evaluate the experiment on testing data.
+```
+python eval.py --path_prefix ckpt/exp_cor_bou/epoch_30
+```
+For now, only training objective is evaluted. Convert evaluation code from offcial matlab to python is still work in progress.
+
+| exp | edg loss | cor loss |
+| :-: | -------: | -------: |
+| official  | `0.128767` | `0.085045` |
+| this repo | **`0.117605`** | **`0.079642`** |
+| rgb  only | `0.130905` | `0.090400` |
