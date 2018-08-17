@@ -7,9 +7,9 @@ from scipy.io import loadmat
 from PIL import Image
 
 
-DATA_DIR = './data'
-ORGIN_DATA_DIR = './data/origin/data'
-ORGIN_GT_DIR = './data/origin/gt'
+DATA_DIR = 'data'
+ORGIN_DATA_DIR = os.path.join('data', 'origin', 'data')
+ORGIN_GT_DIR = os.path.join('data', 'origin', 'gt')
 
 
 # Variables for train/val/test split
@@ -21,8 +21,12 @@ train_pats = [
 valid_pats = ['panoContext_%s_val.t7', 'stanford2d-3d_%s_area_3.t7']
 test_pats = ['panoContext_%s_test.t7', 'stanford2d-3d_%s_area_5.t7']
 
+train_pano_map = os.path.join('data', 'panoContext_trainmap.txt')
+valid_pano_map = os.path.join('data', 'panoContext_valmap.txt')
+test_pano_map = os.path.join('data', 'panoContext_testmap.txt')
 
-def cvt2png(target_dir, patterns):
+
+def cvt2png(target_dir, patterns, pano_map_path):
     os.makedirs(target_dir, exist_ok=True)
     for cat in cat_list:
         for pat in patterns:
@@ -43,6 +47,18 @@ def cvt2png(target_dir, patterns):
                 fnames = [line.strip() for line in f]
             print('%-30s: %3d examples' % (pat % cat, len(fnames)))
 
+            # Remapping panoContext filenames
+            if pat.startswith('pano'):
+                fnames_cnt = dict([(v, 0) for v in fnames])
+                with open(pano_map_path) as f:
+                    for line in f:
+                        v, k, _ = line.split()
+                        k = int(k)
+                        fnames[k] = v
+                        fnames_cnt[v] += 1
+                for v in fnames_cnt.values():
+                    assert v == 1
+
             # Parse th file
             imgs = torchfile.load(th_path)
             assert imgs.shape[0] == len(fnames), 'number of data and gt mismatched !!!'
@@ -62,9 +78,9 @@ def cvt2png(target_dir, patterns):
                         (img[0] * 255).astype(np.uint8)).save(target_path)
 
 
-cvt2png(os.path.join(DATA_DIR, 'train'), train_pats)
-cvt2png(os.path.join(DATA_DIR, 'valid'), valid_pats)
-cvt2png(os.path.join(DATA_DIR, 'test'), test_pats)
+cvt2png(os.path.join(DATA_DIR, 'train'), train_pats, train_pano_map)
+cvt2png(os.path.join(DATA_DIR, 'valid'), valid_pats, valid_pano_map)
+cvt2png(os.path.join(DATA_DIR, 'test'), test_pats, test_pano_map)
 
 # Copy ground truth corner label
 train_set = set(os.listdir(os.path.join(DATA_DIR, 'train', cat_list[0])))
@@ -94,6 +110,13 @@ for path in glob.glob(os.path.join(ORGIN_GT_DIR, 'label_cor', '**', '*')):
     k = os.path.basename(path)[:-4]
     mat = loadmat(path)['cor'][:, :2]
     assert mat.shape[0] == 8 or mat.shape[0] == 12
+    assert k.startswith('pano') or k.startswith('camera')
+
+    if k.startswith('pano'):
+        mat = mat / 8.890625
+    else:
+        mat = mat / 4.0
+
     if k in train_set:
         problems['no match labeled corner']['train'].remove(k)
         if mat.shape[0] == 8:
