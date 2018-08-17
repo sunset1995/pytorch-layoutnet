@@ -1,6 +1,6 @@
 # pytorch-layoutnet
 This is an unofficial implementation of [**LayoutNet**: Reconstructing the 3D Room Layout from a Single RGB Image](https://github.com/zouchuhang/LayoutNet). [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
-Currently only joint bounday branch and corner branch are implemented, 3d layout regressor is ignored as it shows little improvement and is not relate to inference.
+Currently only joint bounday branch and corner branch are implemented. Pre/post-processing and evaluation code converted from matlab still work in progress (only training objective is evaluated now).
 
 ## Requirements
 - Python 3
@@ -64,6 +64,12 @@ For now, only training objective is evaluted. Convert evaluation code from offci
 
 | exp | edg loss | cor loss |
 | :-: | -------: | -------: |
-| official  | `0.128767` | `0.085045` |
+| pretrained from official  | `0.128767` | `0.085045` |
 | this repo | **`0.117605`** | **`0.079642`** |
 | rgb  only | `0.130905` | `0.090400` |
+
+## References
+- [LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image](https://arxiv.org/abs/1803.08999)
+  - Chuhang Zou, Alex Colburn, Qi Shan, Derek Hoiem
+  - CVPR2018
+- [Official torch implementation](https://github.com/zouchuhang/LayoutNet)
