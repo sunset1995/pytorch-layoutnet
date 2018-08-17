@@ -40,7 +40,7 @@ Execute below command to get the same output as demos.
   ![demo edge](assert/pano_aaccxxpwmsdgvj_edg.png)
 - output corner probability map, suffix with `_cor.png`
   ![demo corner](assert/pano_aaccxxpwmsdgvj_cor.png)
-- output boundary, suffix with `_bon.png`
+- output boundary, suffix with `_bon.png` (Note that below result isn't processed by 3D layout optimization)
   ![demo boundary](assert/pano_aaccxxpwmsdgvj_bon.png)
 
 ## Training
@@ -72,4 +72,13 @@ For now, only training objective is evaluted. Convert evaluation code from offci
 - [LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image](https://arxiv.org/abs/1803.08999)
   - Chuhang Zou, Alex Colburn, Qi Shan, Derek Hoiem
   - CVPR2018
+  ```
+  @inproceedings{zou2018layoutnet,
+    title={LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image},
+    author={Zou, Chuhang and Colburn, Alex and Shan, Qi and Hoiem, Derek},
+    booktitle={Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition},
+    pages={2051--2059},
+    year={2018}
+  }
+  ```
 - [Official torch implementation](https://github.com/zouchuhang/LayoutNet)
