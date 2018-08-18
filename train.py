@@ -30,6 +30,8 @@ parser.add_argument('--no_flip', action='store_true',
                     help='disable left-right flip augmentation')
 parser.add_argument('--no_rotate', action='store_true',
                     help='disable horizontal rotate augmentation')
+parser.add_argument('--no_gamma', action='store_true',
+                    help='disable gamma augmentation')
 parser.add_argument('--num_workers', default=6, type=int,
                     help='numbers of workers for dataloaders')
 # optimization related arguments
@@ -72,10 +74,12 @@ os.makedirs(os.path.join(args.ckpt, args.id), exist_ok=True)
 # Create dataloader
 dataset_train = PanoDataset(root_dir=args.root_dir_train,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
-                            flip=not args.no_flip, rotate=not args.no_rotate)
+                            flip=not args.no_flip, rotate=not args.no_rotate,
+                            gamma=not args.no_gamma)
 dataset_valid = PanoDataset(root_dir=args.root_dir_valid,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
-                            flip=False, rotate=False)
+                            flip=False, rotate=False,
+                            gamma=False)
 loader_train = DataLoader(dataset_train, args.batch_size_train,
                           shuffle=True, drop_last=True,
                           num_workers=args.num_workers,

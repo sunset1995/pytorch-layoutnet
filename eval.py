@@ -37,7 +37,8 @@ device = torch.device(args.device)
 # Create dataloader
 dataset = PanoDataset(root_dir=args.root_dir,
                       cat_list=[*args.input_cat, 'edge', 'cor'],
-                      flip=False, rotate=False)
+                      flip=False, rotate=False,
+                      gamma=False)
 loader = DataLoader(dataset, args.batch_size,
                     shuffle=False, drop_last=False,
                     num_workers=args.num_workers,

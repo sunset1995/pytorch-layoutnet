@@ -22,14 +22,20 @@ class PanoDataset(data.Dataset):
         whether to performe random left-right flip
     @rotate (bool)
         whether to performe random horizontal angle rotate
+    @gamma (bool)
+        whether to performe random gamma augmentation
+        Note that it only perfome on first in cat_list
     '''
-    def __init__(self, root_dir, cat_list, flip=False, rotate=False, return_filenames=False):
+    def __init__(self, root_dir, cat_list,
+                 flip=False, rotate=False, gamma=False,
+                 return_filenames=False):
         self.root_dir = root_dir
         self.cat_list = cat_list
         self.fnames = [
             fname for fname in os.listdir(os.path.join(root_dir, cat_list[0]))]
         self.flip = flip
         self.rotate = rotate
+        self.gamma = gamma
         self.return_filenames = return_filenames
 
         self._check_dataset()
@@ -59,6 +65,11 @@ class PanoDataset(data.Dataset):
         if self.rotate:
             dx = np.random.randint(npimg_list[0].shape[1])
             npimg_list = [np.roll(npimg, dx, axis=1) for npimg in npimg_list]
+
+        # Random gamma augmentation
+        if self.gamma:
+            p = np.random.uniform(0.5, 2)
+            npimg_list[0] = npimg_list[0] ** p
 
         # Transpose to C x H x W
         npimg_list = [
