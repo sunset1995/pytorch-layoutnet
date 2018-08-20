@@ -35,7 +35,7 @@ Currently only joint bounday branch and corner branch are implemented. Pre/post-
 ## Visualization
 See `python visual.py -h` for detailed arguments explaination. Basically, `--path_prefix` give the prefix path to 3 `state_dict` to load, `--img_glob` and `--line_glob` tell the input channels of rgb and line (remember to add quotes if you use wildcards like `*` in your glob path). Finally `--output_dir` specify the directory to dump the results.  
 Execute below command to get the same output as demos.  
-```python visual.py --img_glob "data/test/img/pano_aaccxxpwmsdgvj.png" --line_glob "data/test/line/pano_aaccxxpwmsdgvj.png" --output_dir assert/```
+```python visual.py --flip --rotate 0.25 0.5 0.75 --img_glob "data/test/img/pano_aaccxxpwmsdgvj.png" --line_glob "data/test/line/pano_aaccxxpwmsdgvj.png" --output_dir assert/```
 - output boudary probability map, suffix with `_edg.png`
   ![demo edge](assert/pano_aaccxxpwmsdgvj_edg.png)
 - output corner probability map, suffix with `_cor.png`
