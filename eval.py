@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
 from utils import StatisticDict
-from pano import get_cor_id
+from pano import getIniCor
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -38,7 +38,8 @@ device = torch.device(args.device)
 dataset = PanoDataset(root_dir=args.root_dir,
                       cat_list=[*args.input_cat, 'edge', 'cor'],
                       flip=False, rotate=False,
-                      gamma=False)
+                      gamma=False,
+                      return_filenames=True)
 loader = DataLoader(dataset, args.batch_size,
                     shuffle=False, drop_last=False,
                     num_workers=args.num_workers,
@@ -63,8 +64,8 @@ for ith, datas in enumerate(loader):
         # Prepare data
         x = torch.cat([datas[i]
                       for i in range(len(args.input_cat))], dim=1).to(device)
-        y_edg = datas[-2].to(device)
-        y_cor = datas[-1].to(device)
+        y_edg = datas[-3].to(device)
+        y_cor = datas[-2].to(device)
         b_sz = x.size(0)
 
         # Feedforward
@@ -85,5 +86,18 @@ for ith, datas in enumerate(loader):
     test_losses.update('edg loss', loss_edg, weight=b_sz)
     test_losses.update('cor loss', loss_cor, weight=b_sz)
 
+    for i, path in enumerate(datas[-1]):
+        k = path.split('/')[-1][:-4]
+        path = os.path.join(args.root_dir, 'label_cor', '%s.npy' % k)
+        if not os.path.isfile(path):
+            continue
+        gt = np.load(path)
+
+        cor = torch.sigmoid(y_cor_[i, 0]).cpu().numpy().astype(np.float64)
+        cor_m = cor.max(0)
+        im_h, im_w = cor.shape
+        cor_id = getIniCor(cor_m, cor, im_h)
+        cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5 / 1144.866804
+        test_losses.update('Corner error', cor_error.mean())
 
 print('[RESULT] %s' % (test_losses), flush=True)

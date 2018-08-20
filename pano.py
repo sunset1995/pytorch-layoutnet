@@ -18,20 +18,22 @@ def find_4peaks(signal, prominence, distance):
 
 
 def getIniCor(cor_m, corn, im_h):
-    cor_prominence = 58
-    pk_loc_c, _ = find_4peaks(cor_m, prominence=cor_prominence, distance=20)
-    while len(pk_loc_c) < 4 and cor_prominence > 10:
-        cor_prominence = cor_prominence * 0.9
-        pk_loc_c, _ = find_4peaks(cor_m, prominence=cor_prominence, distance=20)
+    H_prominence = cor_m.max() * 0.2
+    pk_loc_c, _ = find_4peaks(cor_m, prominence=H_prominence, distance=20)
+    while len(pk_loc_c) < 4 and H_prominence > 1e-4:
+        H_prominence = H_prominence * 0.9
+        pk_loc_c, _ = find_4peaks(cor_m, prominence=H_prominence, distance=20)
     while len(pk_loc_c) < 4:
         pk_loc_c = np.array([1, *pk_loc_c])
 
     cor_id = []
     for j in range(4):
-        locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=50, distance=20)
+        V_prominence = corn[:, pk_loc_c[j]].max() * 0.2
+        locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=V_prominence, distance=20)
         pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
-        if pks_t.size < 2:
-            locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=5, distance=20)
+        while pks_t.size < 2 and V_prominence > 1e-4:
+            V_prominence = V_prominence * 0.9
+            locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=V_prominence, distance=20)
             pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
         if pks_t.size < 2:
             locs_t = np.array([int(im_h / 3), int(im_h * 2 / 3)])
