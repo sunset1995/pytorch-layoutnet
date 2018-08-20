@@ -9,7 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
-from utils import group_weight, adjust_learning_rate
+from utils import StatisticDict
 from pano import get_cor_id
 
 
@@ -56,7 +56,7 @@ cor_decoder.load_state_dict(torch.load('%s_cor_decoder.pth' % args.path_prefix))
 
 # Start training
 criti = nn.BCEWithLogitsLoss(reduction='none')
-loss_statistic = {'n': 0, 'edg': 0, 'cor': 0}
+test_losses = StatisticDict()
 for ith, datas in enumerate(loader):
     print('processed %d batches out of %d' % (ith, len(loader)), end='\r', flush=True)
     with torch.no_grad():
@@ -82,13 +82,8 @@ for ith, datas in enumerate(loader):
         loss_cor[y_cor == 0.] *= 0.2
         loss_cor = loss_cor.mean().item()
 
-    loss_statistic['n'] += b_sz
-    loss_statistic['edg'] += loss_edg * b_sz
-    loss_statistic['cor'] += loss_cor * b_sz
+    test_losses.update('edg loss', loss_edg, weight=b_sz)
+    test_losses.update('cor loss', loss_cor, weight=b_sz)
 
 
-loss_statistic['edg'] /= loss_statistic['n']
-loss_statistic['cor'] /= loss_statistic['n']
-print('')
-print('edg loss %.6f | cor loss %.6f' % (
-    loss_statistic['edg'], loss_statistic['cor']), flush=True)
+print('[RESULT] %s' % (test_losses), flush=True)
