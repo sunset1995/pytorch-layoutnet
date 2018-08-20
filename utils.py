@@ -70,3 +70,23 @@ class Statistic():
             return float(self.total / self.weight)
         else:
             return float(self.total)
+
+
+class StatisticDict():
+    '''
+    Wrapper for Statistic
+    '''
+    def __init__(self, winsz=0):
+        self.winsz = winsz
+        self._map = {}
+        self._order = []
+
+    def update(self, k, val, weight=1):
+        if k not in self._map:
+            self._map[k] = Statistic(self.winsz)
+            self._order.append(k)
+        self._map[k].update(val, weight)
+
+    def __str__(self):
+        return ' | '.join([
+            '%s %.6f' % (k, self._map[k]) for k in self._order])

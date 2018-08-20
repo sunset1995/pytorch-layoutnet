@@ -9,7 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
-from utils import group_weight, adjust_learning_rate, Statistic
+from utils import group_weight, adjust_learning_rate, StatisticDict
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -114,8 +114,7 @@ args.warmup_iters = args.warmup_epochs * len(loader_train)
 args.max_iters = args.epochs * len(loader_train)
 args.running_lr = args.warmup_lr if args.warmup_epochs > 0 else args.lr
 args.cur_iter = 0
-edg_run_loss = Statistic(winsz=100)
-cor_run_loss = Statistic(winsz=100)
+train_losses = StatisticDict(winsz=100)
 criti = nn.BCEWithLogitsLoss(reduction='none')
 
 print(args)
@@ -162,11 +161,11 @@ for ith_epoch in range(1, args.epochs + 1):
         optimizer.step()
 
         # Statitical result
-        edg_run_loss.update(loss_edg.item())
-        cor_run_loss.update(loss_cor.item())
+        train_losses.update('edg loss', loss_edg.item())
+        train_losses.update('cor loss', loss_cor.item())
         if args.cur_iter % args.disp_iter == 0:
-            print('iter %d (epoch %d) | lr %.6f | edg loss %.6f | cor loss %.6f' % (
-                args.cur_iter, ith_epoch, args.running_lr, edg_run_loss, cor_run_loss),
+            print('iter %d (epoch %d) | lr %.6f | %s' % (
+                args.cur_iter, ith_epoch, args.running_lr, train_losses),
                 flush=True)
 
     # Dump model
@@ -180,8 +179,7 @@ for ith_epoch in range(1, args.epochs + 1):
         print('model saved')
 
     # Validate
-    valid_edg_loss = Statistic()
-    valid_cor_loss = Statistic()
+    valid_losses = StatisticDict()
     for ith_batch, datas in enumerate(loader_valid):
         with torch.no_grad():
             # Prepare data
@@ -204,8 +202,6 @@ for ith_epoch in range(1, args.epochs + 1):
             loss_cor[y_cor == 0.] *= 0.2
             loss_cor = loss_cor.mean()
 
-            valid_edg_loss.update(loss_edg.item(), x.size(0))
-            valid_cor_loss.update(loss_cor.item(), x.size(0))
-    print('validation | epoch %d | edg loss %.6f | cor loss %.6f' % (
-        ith_epoch, valid_edg_loss, valid_cor_loss),
-        flush=True)
+            valid_losses.update('edg loss', loss_edg.item(), weight=x.size(0))
+            valid_losses.update('cor loss', loss_cor.item(), weight=x.size(0))
+    print('validation | epoch %d | %s' % (ith_epoch, valid_losses), flush=True)
