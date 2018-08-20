@@ -111,7 +111,6 @@ def lineFromTwoPoint(pt1, pt2):
         1~3-th dim: normal of the line
         4-th dim: the projection dimension ID
         5~6-th dim: the u of line segment endpoints in projection plane
-    use paintParameterLine to visualize
     '''
     numLine = pt1.shape[0]
     lines = np.zeros((numLine, 6))
@@ -137,16 +136,14 @@ def lineFromTwoPoint(pt1, pt2):
     return lines
 
 
-def paintParameterLine2(parameterLine, width, height, img=None, c=1):
-    lines = np.copy(parameterLine)
-    if img is None:
-        panoEdgeC = np.zeros((height, width, 3), np.float64)
-    else:
-        panoEdgeC = img.astype(np.float64)
-        assert img.shape[0] == height and img.shape[1] == width
+def lineIdxFromCors(cor_all, im_w, im_h):
+    assert len(cor_all) % 2 == 0
+    uv = coords2uv(cor_all, im_w, im_h)
+    xyz = uv2xyzN(uv)
+    lines = lineFromTwoPoint(xyz[0::2], xyz[1::2])
+    num_sample = max(im_h, im_w)
 
-    num_sample = max(height, width)
-
+    cs, rs = [], []
     for i in range(lines.shape[0]):
         n = lines[i, 0:3]
         sid = lines[i, 4] * 2 * np.pi
@@ -162,13 +159,13 @@ def paintParameterLine2(parameterLine, width, height, img=None, c=1):
         xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
         uv = xyz2uvN(xyz, 1)
 
-        m = np.minimum(np.floor((uv[:, 0] + np.pi) / (2 * np.pi) * width) + 1,
-                       width).astype(np.int32)
-        n = np.minimum(np.floor((np.pi / 2 - uv[:, 1]) / np.pi * height) + 1,
-                       height).astype(np.int32)
-        panoEdgeC[n - 1, m - 1, c] = 255
-
-    return panoEdgeC
+        r = np.minimum(np.floor((uv[:, 0] + np.pi) / (2 * np.pi) * im_w) + 1,
+                       im_w).astype(np.int32)
+        c = np.minimum(np.floor((np.pi / 2 - uv[:, 1]) / np.pi * im_h) + 1,
+                       im_h).astype(np.int32)
+        cs.extend(r - 1)
+        rs.extend(c - 1)
+    return rs, cs
 
 
 def get_cor_id(edg_src, cor_src):
@@ -199,8 +196,6 @@ def draw_boundary(edg_src, cor_src, img_src=None):
     @cor_src (numpy array H x W x 1, [0, 255])
         model output corner probability map
     @img_src (numpy array H x W x 3, [0, 255])
-
-    pass
     '''
     im_h, im_w, _ = edg_src.shape
     cor_id = get_cor_id(edg_src, cor_src)
@@ -210,12 +205,17 @@ def draw_boundary(edg_src, cor_src, img_src=None):
                          cor_id[1, :], cor_id[3, :], cor_id[3, :], cor_id[5, :],
                          cor_id[5, :], cor_id[7, :], cor_id[7, :], cor_id[1, :]])
 
-    uv = coords2uv(cor_all, im_w, im_h)
-    xyz = uv2xyzN(uv)
-    lines = lineFromTwoPoint(xyz[0::2], xyz[1::2])
-    panoEdgeC = paintParameterLine2(lines, im_w, im_h, img_src, 1)
+    rs, cs = lineIdxFromCors(cor_all, im_w, im_h)
 
-    return panoEdgeC.astype(np.uint8)
+    if img_src is None:
+        panoEdgeC = np.zeros((im_h, im_w, 3), np.uint8)
+    else:
+        panoEdgeC = img_src.astype(np.uint8)
+        assert img_src.shape[0] == im_h and img_src.shape[1] == im_w
+
+    panoEdgeC[rs, cs, 1] = 255
+
+    return panoEdgeC
 
 
 if __name__ == '__main__':
