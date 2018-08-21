@@ -32,6 +32,8 @@ parser.add_argument('--no_rotate', action='store_true',
                     help='disable horizontal rotate augmentation')
 parser.add_argument('--gamma', action='store_true',
                     help='enable gamma augmentation')
+parser.add_argument('--noise', action='store_true',
+                    help='enable noise augmentation')
 parser.add_argument('--num_workers', default=6, type=int,
                     help='numbers of workers for dataloaders')
 # optimization related arguments
@@ -75,7 +77,7 @@ os.makedirs(os.path.join(args.ckpt, args.id), exist_ok=True)
 dataset_train = PanoDataset(root_dir=args.root_dir_train,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=not args.no_flip, rotate=not args.no_rotate,
-                            gamma=args.gamma)
+                            gamma=args.gamma, noise=args.noise)
 dataset_valid = PanoDataset(root_dir=args.root_dir_valid,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=False, rotate=False,

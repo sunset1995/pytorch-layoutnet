@@ -27,7 +27,7 @@ class PanoDataset(data.Dataset):
         Note that it only perfome on first in cat_list
     '''
     def __init__(self, root_dir, cat_list,
-                 flip=False, rotate=False, gamma=False,
+                 flip=False, rotate=False, gamma=False, noise=False,
                  return_filenames=False):
         self.root_dir = root_dir
         self.cat_list = cat_list
@@ -36,6 +36,7 @@ class PanoDataset(data.Dataset):
         self.flip = flip
         self.rotate = rotate
         self.gamma = gamma
+        self.noise = noise
         self.return_filenames = return_filenames
 
         self._check_dataset()
@@ -70,6 +71,11 @@ class PanoDataset(data.Dataset):
         if self.gamma:
             p = np.random.uniform(0.5, 2)
             npimg_list[0] = npimg_list[0] ** p
+
+        # Random noise augmentation
+        if self.noise:
+            noise = np.random.randn(*npimg_list[0].shape) * 0.05
+            npimg_list[0] = npimg_list[0] + noise
 
         # Transpose to C x H x W
         npimg_list = [
