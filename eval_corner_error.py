@@ -120,8 +120,9 @@ for ith, datas in enumerate(dataset):
     # Construct corner label from predicted corner map
     cor_id = get_ini_cor(cor_img, args.d1, args.d2)
 
-    # Compute corner error
+    # Compute normalized corner error
     cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5
+    cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
     test_losses.update('Corner error', cor_error.mean())
 
 print('[RESULT] %s' % (test_losses), flush=True)
