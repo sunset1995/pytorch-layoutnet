@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
 from utils import StatisticDict
-from pano import getIniCor
+from pano import get_ini_cor
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -26,6 +26,10 @@ parser.add_argument('--input_cat', default=['img', 'line'], nargs='+',
                     help='input channels subdirectories')
 parser.add_argument('--input_channels', default=6, type=int,
                     help='numbers of input channels')
+parser.add_argument('--d1', default=21, type=int,
+                    help='Post-processing parameter.')
+parser.add_argument('--d2', default=3, type=int,
+                    help='Post-processing parameter.')
 # Augmentation related
 parser.add_argument('--flip', action='store_true',
                     help='whether to perfome left-right flip. '
@@ -106,19 +110,18 @@ for ith, datas in enumerate(dataset):
 
     # Load ground truth corner label
     k = datas[-1][:-4]
-    path = os.path.join(args.root_dir, 'label_cor', '%s.npy' % k)
+    path = os.path.join(args.root_dir, 'label_cor', '%s.txt' % k)
     if not os.path.isfile(path):
+        print('Skip', path)
         continue
-    gt = np.load(path)
+    with open(path) as f:
+        gt = np.array([line.strip().split() for line in f], np.float64)
 
     # Construct corner label from predicted corner map
-    cor = cor_img.copy()
-    cor_m = cor.max(0)
-    im_h, im_w = cor.shape
-    cor_id = getIniCor(cor_m, cor, im_h)
+    cor_id = get_ini_cor(cor_img, args.d1, args.d2)
 
     # Compute corner error
-    cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5 / 1144.866804
+    cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5
     test_losses.update('Corner error', cor_error.mean())
 
 print('[RESULT] %s' % (test_losses), flush=True)

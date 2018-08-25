@@ -4,48 +4,34 @@ Reimplement post optimization code from https://github.com/zouchuhang/LayoutNet
 import numpy as np
 import numpy.matlib as matlib
 import scipy.signal
+from scipy.ndimage import convolve
 
 
-def find_4peaks(signal, prominence, distance):
+def find_N_peaks(signal, prominence, distance, N=4):
     locs, _ = scipy.signal.find_peaks(signal,
                                       prominence=prominence,
                                       distance=distance)
     pks = signal[locs]
     pk_id = np.argsort(-pks)
-    pk_loc = locs[pk_id[:min(4, len(pks))]]
+    pk_loc = locs[pk_id[:min(N, len(pks))]]
     pk_loc = np.sort(pk_loc)
     return pk_loc, signal[pk_loc]
 
 
-def getIniCor(cor_m, corn, im_h):
-    H_prominence = cor_m.max() * 0.2
-    pk_loc_c, _ = find_4peaks(cor_m, prominence=H_prominence, distance=20)
-    while len(pk_loc_c) < 4 and H_prominence > 1e-4:
-        H_prominence = H_prominence * 0.9
-        pk_loc_c, _ = find_4peaks(cor_m, prominence=H_prominence, distance=20)
-    while len(pk_loc_c) < 4:
-        pk_loc_c = np.array([1, *pk_loc_c])
-
+def get_ini_cor(cor_img, d1=21, d2=3):
+    cor = convolve(cor_img, np.ones((d1, d1)), mode='constant', cval=0.0)
     cor_id = []
-    for j in range(4):
-        V_prominence = corn[:, pk_loc_c[j]].max() * 0.2
-        locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=V_prominence, distance=20)
-        pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
-        while pks_t.size < 2 and V_prominence > 1e-4:
-            V_prominence = V_prominence * 0.9
-            locs_t, _ = find_4peaks(corn[:, pk_loc_c[j]], prominence=V_prominence, distance=20)
-            pks_t = corn[:, pk_loc_c[j]][locs_t].astype(np.float64)
-        if pks_t.size < 2:
-            locs_t = np.array([int(im_h / 3), int(im_h * 2 / 3)])
-            pks_t = np.array([0, 0])
-        pk_id_t = np.argsort(-pks_t)
-        pk_loc_t = locs_t[pk_id_t[:min(2, pks_t.size)]]
-        pk_loc_t = np.sort(pk_loc_t)
-        cor_id.append([pk_loc_c[j], pk_loc_t[0]])
-        cor_id.append([pk_loc_c[j], pk_loc_t[1]])
-    cor_id = np.array(cor_id)
+    X_loc = find_N_peaks(cor.sum(0), prominence=None,
+                         distance=20, N=4)[0]
+    for x in X_loc:
+        x_ = int(np.round(x))
 
-    return cor_id
+        V_signal = cor[:, max(0, x_-d2):x_+d2+1].sum(1)
+        y1, y2 = find_N_peaks(V_signal, prominence=None,
+                              distance=20, N=2)[0]
+        cor_id.append((x, y1))
+        cor_id.append((x, y2))
+    return np.array(cor_id)
 
 
 def coords2uv(coords, width, height):
@@ -168,42 +154,19 @@ def lineIdxFromCors(cor_all, im_w, im_h):
     return rs, cs
 
 
-def get_cor_id(edg_src, cor_src):
+def draw_boundary(cor_src, img_src=None):
     '''
-    @edg_src (numpy array H x W x 3, [0, 255])
-        model output edge probability map
-    @cor_src (numpy array H x W, [0, 255])
-        model output corner probability map
-
-    Return: list of 2d cordinates of corners
-    '''
-    edg = edg_src[..., 0].astype(np.float64)  # wall-wall channel
-    cor = cor_src.astype(np.float64)
-    assert edg.shape == cor.shape, 'edg and cor map size mismatch'
-    edg_m = edg.max(0)
-    cor_m = cor.max(0)
-
-    im_h, im_w = edg.shape
-    cor_id = getIniCor(cor_m, cor, im_h)
-
-    return cor_id
-
-
-def draw_boundary(edg_src, cor_src, img_src=None):
-    '''
-    @edg_src (numpy array H x W x 3, [0, 255])
-        model output edge probability map
     @cor_src (numpy array H x W x 1, [0, 255])
         model output corner probability map
     @img_src (numpy array H x W x 3, [0, 255])
     '''
-    im_h, im_w, _ = edg_src.shape
-    cor_id = get_cor_id(edg_src, cor_src)
-    cor_all = np.vstack([cor_id,
-                         cor_id[0, :], cor_id[2, :], cor_id[2, :], cor_id[4, :],
-                         cor_id[4, :], cor_id[6, :], cor_id[6, :], cor_id[0, :],
-                         cor_id[1, :], cor_id[3, :], cor_id[3, :], cor_id[5, :],
-                         cor_id[5, :], cor_id[7, :], cor_id[7, :], cor_id[1, :]])
+    im_h, im_w = cor_src.shape
+    cor_id = get_ini_cor(cor_src)
+    cor_all = [cor_id]
+    for i in range(len(cor_id)):
+        cor_all.append(cor_id[i, :])
+        cor_all.append(cor_id[(i+2)%len(cor_id), :])
+    cor_all = np.vstack(cor_all)
 
     rs, cs = lineIdxFromCors(cor_all, im_w, im_h)
 
