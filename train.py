@@ -30,8 +30,8 @@ parser.add_argument('--no_flip', action='store_true',
                     help='disable left-right flip augmentation')
 parser.add_argument('--no_rotate', action='store_true',
                     help='disable horizontal rotate augmentation')
-parser.add_argument('--gamma', action='store_true',
-                    help='enable gamma augmentation')
+parser.add_argument('--no_gamma', action='store_true',
+                    help='disable gamma augmentation')
 parser.add_argument('--noise', action='store_true',
                     help='enable noise augmentation')
 parser.add_argument('--num_workers', default=6, type=int,
@@ -41,21 +41,21 @@ parser.add_argument('--batch_size_train', default=2, type=int,
                     help='training mini-batch size')
 parser.add_argument('--batch_size_valid', default=2, type=int,
                     help='validation mini-batch size')
-parser.add_argument('--epochs', default=30, type=int,
+parser.add_argument('--epochs', default=50, type=int,
                     help='epochs to train')
-parser.add_argument('--optim', default='SGD',
+parser.add_argument('--optim', default='Adam',
                     help='optimizer to use. only support SGD and Adam')
-parser.add_argument('--lr', default=0.01831563889, type=float,
+parser.add_argument('--lr', default=1e-4, type=float,
                     help='learning rate')
-parser.add_argument('--lr_pow', default=0.9, type=float,
+parser.add_argument('--lr_pow', default=0, type=float,
                     help='power in poly to drop LR')
 parser.add_argument('--warmup_lr', default=1e-6, type=float,
                     help='starting learning rate for warm up')
-parser.add_argument('--warmup_epochs', default=5, type=int,
+parser.add_argument('--warmup_epochs', default=0, type=int,
                     help='numbers of warmup epochs')
 parser.add_argument('--beta1', default=0.9, type=float,
                     help='momentum for sgd, beta1 for adam')
-parser.add_argument('--weight_decay', default=1e-4, type=float,
+parser.add_argument('--weight_decay', default=0, type=float,
                     help='factor for L2 regularization')
 # Misc arguments
 parser.add_argument('--no_cuda', action='store_true',
@@ -77,7 +77,7 @@ os.makedirs(os.path.join(args.ckpt, args.id), exist_ok=True)
 dataset_train = PanoDataset(root_dir=args.root_dir_train,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=not args.no_flip, rotate=not args.no_rotate,
-                            gamma=args.gamma, noise=args.noise)
+                            gamma=not args.no_gamma, noise=args.noise)
 dataset_valid = PanoDataset(root_dir=args.root_dir_valid,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=False, rotate=False,
