@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
 from utils import StatisticDict
-from pano import getIniCor
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
