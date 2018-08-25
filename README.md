@@ -48,7 +48,7 @@ See `python train.py -h` and `python valid.py -h` for detailed arguments explana
 **Note** that the default training strategy is different from official. The default optimizer is `SGD` with momentume. Learning rate schedule is warmup + poly decay.  
 To launch experiments as official "corner+boundary" setting (`--id` is used to identified the experiment and can be named youself):
 ```
-python train.py --id exp_cor_bou
+python train.py --id exp_default
 ```
 To train only using RGB channels:  
 ```
@@ -58,15 +58,19 @@ python train.py --id exp_rgb --input_cat img --input_channels 3
 ## Evaluation
 To evaluate the experiment on testing data.
 ```
-python eval.py --path_prefix ckpt/exp_cor_bou/epoch_30
+python eval.py --path_prefix ckpt/exp_default/epoch_30
+python eval_corner_error.py --path_prefix ckpt/exp_default/epoch_30 --rotate 0.5 --flip
 ```
-For now, only training objective is evaluted. Convert evaluation code from offcial matlab to python is still work in progress.
+For now, only training objective and corner error is evaluted. Converting other evaluation metric from offcial matlab to python is still WIP.  
+- `edg loss`: training objective
+- `cor loss`: training objective
+- `Corner error`: L2 distance between ground truth and predicted corner positions normalized by image diagonal length.
 
-| exp | edg loss | cor loss |
-| :-: | -------: | -------: |
-| pretrained from official  | `0.128767` | `0.085045` |
-| this repo | **`0.117605`** | **`0.079642`** |
-| rgb  only | `0.130905` | `0.090400` |
+| exp | edg loss | cor loss | Corner error (%) |
+| :-: | :------: | :------: | :--------------: |
+| panofull_joint_box_pretrained | `0.128767` | `0.085045` | `1.35` | 
+| default setting               | `0.116559` | `0.077435` | `1.04` |
+| rgb  only                     | `0.130905` | `0.090400` | |
 
 ## References
 - [LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image](https://arxiv.org/abs/1803.08999)
@@ -81,4 +85,4 @@ For now, only training objective is evaluted. Convert evaluation code from offci
     year={2018}
   }
   ```
-- [Official torch implementation](https://github.com/zouchuhang/LayoutNet)
+  - [Official torch implementation](https://github.com/zouchuhang/LayoutNet)
