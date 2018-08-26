@@ -111,9 +111,6 @@ for ith, datas in enumerate(dataset):
     # Load ground truth corner label
     k = datas[-1][:-4]
     path = os.path.join(args.root_dir, 'label_cor', '%s.txt' % k)
-    if not os.path.isfile(path):
-        print('Skip', path)
-        continue
     with open(path) as f:
         gt = np.array([line.strip().split() for line in f], np.float64)
 
