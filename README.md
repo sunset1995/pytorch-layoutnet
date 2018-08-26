@@ -69,7 +69,7 @@ For now, only training objective and corner error is evaluted. Converting other 
 | exp | edg loss | cor loss | Corner error (%) |
 | :-: | :------: | :------: | :--------------: |
 | panofull_joint_box_pretrained | `0.128767` | `0.085045` | `1.35` | 
-| default setting               | `0.116559` | `0.077435` | `1.04` |
+| default setting               | `0.116559` | `0.077435` | `0.98` |
 | rgb  only                     | `0.130905` | `0.090400` | |
 
 ## References
