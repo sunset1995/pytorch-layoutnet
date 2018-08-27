@@ -185,9 +185,10 @@ for ith_epoch in range(1, args.epochs + 1):
     for ith_batch, datas in enumerate(loader_valid):
         with torch.no_grad():
             # Prepare data
-            x = torch.cat([datas[0], datas[1]], dim=1).to(device)
-            y_edg = datas[2].to(device)
-            y_cor = datas[3].to(device)
+            x = torch.cat([datas[i]
+                          for i in range(len(args.input_cat))], dim=1).to(device)
+            y_edg = datas[-2].to(device)
+            y_cor = datas[-1].to(device)
 
             # Feedforward
             en_list = encoder(x)
