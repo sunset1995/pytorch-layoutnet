@@ -131,11 +131,17 @@ for i_path, l_path in zip(img_paths, line_paths):
     edg_img = args.alpha * edg_img + (1 - args.alpha) * i_img
     cor_img = args.alpha * cor_img + (1 - args.alpha) * i_img
 
+    # All in one image
+    all_in_one = 0.3 * edg_img + 0.3 * cor_img + 0.4 * i_img
+    all_in_one = draw_boundary(cor_img[..., 0], all_in_one * 255)
+
     # Dump result
     basename = os.path.splitext(os.path.basename(i_path))[0]
     edg_path = os.path.join(args.output_dir, '%s_edg.png' % basename)
     cor_path = os.path.join(args.output_dir, '%s_cor.png' % basename)
     bon_path = os.path.join(args.output_dir, '%s_bon.png' % basename)
+    all_in_one_path = os.path.join(args.output_dir, '%s_all.png' % basename)
     Image.fromarray((edg_img * 255).astype(np.uint8)).save(edg_path)
     Image.fromarray((cor_img * 255).astype(np.uint8)).save(cor_path)
     Image.fromarray(bon_img).save(bon_path)
+    Image.fromarray(all_in_one).save(all_in_one_path)
