@@ -2,6 +2,9 @@
 This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/1803.08999)  "LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image". [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
 Currently only joint bounday branch and corner branch are implemented but they are enough to yield similar qualitative and quantitative (corner error) result as official.  
 
+Sampled visualization from testing data:
+<img src="https://raw.githubusercontent.com/sunset1995/pytorch-layoutnet/master/assert/demo.png" width="1024">
+
 \[WIP\] components:
 - line segment detector (LSD)
 - panoramic image alignment
