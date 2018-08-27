@@ -1,6 +1,10 @@
 # pytorch-layoutnet
 This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/1803.08999)  "LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image". [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
-Currently only joint bounday branch and corner branch are implemented. Pre/post-processing and evaluation code converted from matlab still work in progress (only training objective is evaluated now).
+Currently only joint bounday branch and corner branch are implemented but they are enough to yield similar qualitative and quantitative (corner error) result as official.  
+
+\[WIP\] components:
+- line segment detector (LSD)
+- panoramic image alignment
 
 ## Requirements
 - Python 3
@@ -21,7 +25,7 @@ Currently only joint bounday branch and corner branch are implemented. Pre/post-
   /ckpt
     /panofull_*_pretrained.t7  (download and extract from official)
 ```
-- Execute `python torch2pytorch_data.py` to convert `data/origin/**/*` to `data/train`, `data/valid` and `data/test` for pytorch data loader. Under these folder `img/` contains all raw rgb `.png` while `line/`, `edge/`, `cor/` contain preprocessed edge detection result, ground truth boundary and ground truth corner respectively.
+- Execute `python torch2pytorch_data.py` to convert `data/origin/**/*` to `data/train`, `data/valid` and `data/test` for pytorch data loader. Under these folder, `img/` contains all raw rgb `.png` while `line/`, `edge/`, `cor/` contain preprocessed Manhattan line segment, ground truth boundary and ground truth corner respectively.
 - Use `torch2pytorch_pretrained_weight.py` to convert official pretrained pano model to `encoder`, `edg_decoder`, `cor_decoder` pytorch `state_dict` (see `python torch2pytorch_pretrained_weight.py -h` for more detailed). examples:
   - to convert layout pretrained only
     ```
@@ -33,7 +37,7 @@ Currently only joint bounday branch and corner branch are implemented. Pre/post-
     ```
 
 ## Visualization
-See `python visual.py -h` for detailed arguments explaination. Basically, `--path_prefix` give the prefix path to 3 `state_dict` to load, `--img_glob` and `--line_glob` tell the input channels of rgb and line (remember to add quotes if you use wildcards like `*` in your glob path). Finally `--output_dir` specify the directory to dump the results.  
+See `python visual.py -h` for detailed arguments explaination. Basically, `--path_prefix` give the prefix path to 3 `state_dict` to load, `--img_glob` and `--line_glob` tell the input channels of rgb and line segment (remember to add quotes if you use wildcards like `*` in your glob path). Finally `--output_dir` specify the directory to dump the results.  
 Execute below command to get the same output as demos.  
 ```python visual.py --flip --rotate 0.25 0.5 0.75 --img_glob "data/test/img/pano_aaccxxpwmsdgvj.png" --line_glob "data/test/line/pano_aaccxxpwmsdgvj.png" --output_dir assert/```
 - output boudary probability map, suffix with `_edg.png`
@@ -44,33 +48,39 @@ Execute below command to get the same output as demos.
   ![demo boundary](assert/pano_aaccxxpwmsdgvj_bon.png)
 
 ## Training
-See `python train.py -h` and `python valid.py -h` for detailed arguments explanation.  
-**Note** that the default training strategy is different from official. The default optimizer is `SGD` with momentume. Learning rate schedule is warmup + poly decay.  
-To launch experiments as official "corner+boundary" setting (`--id` is used to identified the experiment and can be named youself):
+See `python train.py -h` for detailed arguments explanation.  
+The default training strategy is the same as official. To launch experiments as official "corner+boundary" setting (`--id` is used to identified the experiment and can be named youself):
 ```
 python train.py --id exp_default
 ```
-To train only using RGB channels:  
+To train only using RGB channels as input (no Manhattan line segment):  
 ```
 python train.py --id exp_rgb --input_cat img --input_channels 3
 ```
 
 ## Evaluation
-To evaluate the experiment on testing data.
+See `python eval.py -h` and `python eval_corner_error.py -h` for more detailed arguments explanation. Examples:  
 ```
 python eval.py --path_prefix ckpt/exp_default/epoch_30
 python eval_corner_error.py --path_prefix ckpt/exp_default/epoch_30 --rotate 0.5 --flip
 ```
-For now, only training objective and corner error is evaluted. Converting other evaluation metric from offcial matlab to python is still WIP.  
-- `edg loss`: training objective
-- `cor loss`: training objective
-- `Corner error`: L2 distance between ground truth and predicted corner positions normalized by image diagonal length.
+*Note* - post-processing component, 3D layout optimization, is not implemented. Alternatively, algorithm yieling initial corner guess are modified to get better result.  
 
 | exp | edg loss | cor loss | Corner error (%) |
 | :-: | :------: | :------: | :--------------: |
 | panofull_joint_box_pretrained | `0.128767` | `0.085045` | `1.35` | 
 | default setting               | `0.116559` | `0.077435` | `0.98` |
-| rgb  only                     | `0.130905` | `0.090400` | |
+| rgb  only                     | `0.124780` | `0.085284` | `1.43` |
+
+- Columns
+  - `edg loss` - training objective
+  - `cor loss` - training objective
+  - `Corner error` - L2 distance between ground truth and predicted corner positions normalized by image diagonal
+- Rows
+  - `panofull_joint_box_pretrained` - state_dict directly converted from official
+  - `default setting` - all hyperparameters are not modified
+  - `rgb only` - model only trained with rgb, no line detection as extra features
+
 
 ## References
 - [LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image](https://arxiv.org/abs/1803.08999)
