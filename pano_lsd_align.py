@@ -1,16 +1,16 @@
+'''
+Most of the code are modified from LayoutNet official's matlab code
+in which some of the code are borrowed from PanoContext and PanoBasic
+
+author: Cheng Sun
+email : s2821d3721@gmail.com
+'''
 import numpy as np
 from scipy.ndimage import map_coordinates
 from pano import coords2uv, uv2xyzN, xyz2uvN, computeUVN
 
 
 def warpImageFast(im, XXdense, YYdense):
-    '''
-    Citation:
-    J. Xiao, K. A. Ehinger, A. Oliva and A. Torralba.
-    Recognizing Scene Viewpoint using Panoramic Place Representation.
-    Proceedings of 25th IEEE Conference on Computer Vision and Pattern Recognition, 2012.
-    http://sun360.mit.edu
-    '''
     minX = max(1., np.floor(XXdense.min()) - 1)
     minY = max(1., np.floor(YYdense.min()) - 1)
 
