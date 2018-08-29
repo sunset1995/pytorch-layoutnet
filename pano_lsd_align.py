@@ -234,6 +234,132 @@ def edgeFromImg2Pano(edge):
     return panoList
 
 
+def _intersection(range1, range2):
+    if range1[1] < range1[0]:
+        range11 = [range1[0], 1]
+        range12 = [0, range1[1]]
+    else:
+        range11 = range1
+        range12 = [0, 0]
+
+    if range2[1] < range2[0]:
+        range21 = [range2[0], 1]
+        range22 = [0, range2[1]]
+    else:
+        range21 = range2
+        range22 = [0, 0]
+
+    b = max(range11[0], range21[0]) < min(range11[1], range21[1])
+    if b:
+        return b
+    b2 = max(range12[0], range22[0]) < min(range12[1], range22[1])
+    b = b or b2
+    return b
+
+
+def _insideRange(pt, range):
+    if range[1] > range[0]:
+        b = pt >= range[0] and pt <= range[1]
+    else:
+        b1 = pt >= range[0] and pt <= 1
+        b2 = pt >= 0 and pt <= range[1]
+        b = b1 or b2
+    return b
+
+
+def combineEdgesN(edges):
+    '''
+    Combine some small line segments, should be very conservative
+    OUTPUT
+        lines: combined line segments
+        ori_lines: original line segments
+
+        line format [nx ny nz projectPlaneID umin umax LSfov score]
+    '''
+    arcList = []
+    for edge in edges:
+        panoLst = edge['panoLst']
+        if len(panoLst) == 0:
+            continue
+        arcList.append(panoLst)
+    arcList = np.concatenate(arcList, 0)
+
+    # ori lines
+    numLine = len(arcList)
+    ori_lines = np.zeros((numLine, 8))
+    areaXY = np.abs(np.sum(arcList[:, :3] * np.tile([[0, 0, 1]], [numLine, 1]), 1))
+    areaYZ = np.abs(np.sum(arcList[:, :3] * np.tile([[1, 0, 0]], [numLine, 1]), 1))
+    areaZX = np.abs(np.sum(arcList[:, :3] * np.tile([[0, 1, 0]], [numLine, 1]), 1))
+    planeIDs = np.argmax(np.stack([areaXY, areaYZ, areaZX], -1), 1)  # XY YZ ZX
+
+    for i in range(numLine):
+        ori_lines[i, :3] = arcList[i, :3]
+        ori_lines[i, 3] = planeIDs[i]
+        coord1 = arcList[i, 3:6]
+        coord2 = arcList[i, 6:9]
+        uv = xyz2uvN(np.stack([coord1, coord2]), planeIDs[i])
+        umax = uv[:, 0].max() + np.pi
+        umin = uv[:, 0].min() + np.pi
+        if umax - umin > np.pi:
+            ori_lines[i, 4:6] = np.array([umax, umin]) / 2 / np.pi
+        else:
+            ori_lines[i, 4:6] = np.array([umin, umax]) / 2 / np.pi
+        ori_lines[i, 6] = np.arccos(
+            np.dot(coord1, coord2) / (np.linalg.norm(coord1) * np.linalg.norm(coord2)))
+        ori_lines[i, 7] = arcList[i, 9]
+
+    # additive combination
+    lines = ori_lines.copy()
+    for _ in range(3):
+        numLine = len(lines)
+        valid_line = np.ones(numLine, bool)
+        for i in range(numLine):
+            if not valid_line[i]:
+                continue
+            dotProd = (lines[:, :3] * np.tile(lines[i:i+1, :3], [numLine, 1])).sum(1)
+            valid_curr = np.logical_and((np.abs(dotProd) > np.cos(np.pi / 180)), valid_line)
+            valid_curr[i] = False
+            for j in np.nonzero(valid_curr)[0]:
+                range1 = lines[i, 4:6]
+                range2 = lines[j, 4:6]
+                valid_rag = _intersection(range1, range2)
+                if not valid_rag:
+                    continue
+
+                # combine
+                I = np.argmax(np.abs(lines[i, :3]))
+                if lines[i, I] * lines[j, I] > 0:
+                    nc = lines[i, :3] * lines[i, 6] + lines[j, :3] * lines[j, 6]
+                else:
+                    nc = lines[i, :3] * lines[i, 6] - lines[j, :3] * lines[j, 6]
+                nc = nc / np.linalg.norm(nc)
+
+                if _insideRange(range1[0], range2):
+                    nrmin = range2[0]
+                else:
+                    nrmin = range1[0]
+
+                if _insideRange(range1[1], range2):
+                    nrmax = range2[1]
+                else:
+                    nrmax = range1[1]
+
+                u = np.array([[nrmin], [nrmax]]) * 2 * np.pi - np.pi
+                v = computeUVN(nc, u, lines[i, 3])
+                xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
+                l = np.arccos(np.dot(xyz[0, :], xyz[1, :]))
+                scr = (lines[i,6]*lines[i,7] + lines[j,6]*lines[j,7]) / (lines[i,6]+lines[j,6])
+
+                newLine = np.array([*nc, lines[i, 3], nrmin, nrmax, l, scr])
+                lines[i, :] = newLine
+                valid_line[j] = False
+
+        lines = lines[valid_line]
+        print('iter: %d, before: %d, after: %d' % (_, len(valid_line), sum(valid_line)))
+
+    return lines, ori_lines
+
+
 def panoEdgeDetection(img, viewSize=320, qError=2.0):
     '''
     line detection on panorama
@@ -273,6 +399,7 @@ def panoEdgeDetection(img, viewSize=320, qError=2.0):
             'fov': scene['fov'],
         })
         edge[-1]['panoLst'] = edgeFromImg2Pano(edge[-1])
+    lines, olines = combineEdgesN(edge)
 
 
 if __name__ == '__main__':
