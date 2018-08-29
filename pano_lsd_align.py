@@ -191,6 +191,49 @@ def lsdWrap(img, LSD=None, **kwargs):
     return edgeMap, edgeList
 
 
+def edgeFromImg2Pano(edge):
+    edgeList = edge['edgeLst']
+    if len(edgeList) == 0:
+        return np.array([])
+
+    vx = edge['vx']
+    vy = edge['vy']
+    fov = edge['fov']
+    imH, imW = edge['img'].shape
+
+    R = (imW/2) / np.tan(fov/2)
+
+    # im is the tangent plane, contacting with ball at [x0 y0 z0]
+    x0 = R * np.cos(vy) * np.sin(vx)
+    y0 = R * np.cos(vy) * np.cos(vx)
+    z0 = R * np.sin(vy)
+    vecposX = np.array([np.cos(vx), -np.sin(vx), 0])
+    vecposY = np.cross(np.array([x0, y0, z0]), vecposX)
+    vecposY = vecposY / np.sqrt(vecposY @ vecposY.T)
+    Xc = (0 + imW-1) / 2
+    Yc = (0 + imH-1) / 2
+
+    vecx1 = (edgeList[:, 0] - Xc).reshape(-1, 1)
+    vecy1 = (edgeList[:, 1] - Yc).reshape(-1, 1)
+    vecx2 = (edgeList[:, 2] - Xc).reshape(-1, 1)
+    vecy2 = (edgeList[:, 3] - Yc).reshape(-1, 1)
+
+    vec1 = np.tile(vecx1, [1, 3]) * np.tile(vecposX, [len(vecx1), 1]) \
+         + np.tile(vecy1, [1, 3]) * np.tile(vecposY, [len(vecy1), 1])
+    vec2 = np.tile(vecx2, [1, 3]) * np.tile(vecposX, [len(vecx2), 1]) \
+         + np.tile(vecy2, [1, 3]) * np.tile(vecposY, [len(vecy2), 1])
+    coord1 = np.tile([x0, y0, z0], [len(vec1), 1]) + vec1
+    coord2 = np.tile([x0, y0, z0], [len(vec2), 1]) + vec2
+
+    normal = np.cross(coord1, coord2, axis=1)
+    n = np.sqrt(normal[:, 0] ** 2 + normal[:, 1] ** 2 + normal[:, 2] ** 2)
+    normal = normal / n.reshape(-1, 1)
+
+    panoList = np.concatenate([normal, coord1, coord2, edgeList[:, -1].reshape(-1, 1)], 1)
+
+    return panoList
+
+
 def panoEdgeDetection(img, viewSize=320, qError=2.0):
     '''
     line detection on panorama
@@ -229,7 +272,7 @@ def panoEdgeDetection(img, viewSize=320, qError=2.0):
             'vy': scene['vy'],
             'fov': scene['fov'],
         })
-        # edge[-1]['panoLst'] = edgeFromImg2Pano(edge[-1])
+        edge[-1]['panoLst'] = edgeFromImg2Pano(edge[-1])
 
 
 if __name__ == '__main__':
