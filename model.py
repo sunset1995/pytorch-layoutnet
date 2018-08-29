@@ -4,9 +4,10 @@ import torch.nn.functional as F
 import torchvision
 
 
-def conv3x3(in_planes, out_planes):
+def conv3x3(in_planes, out_planes, dilation=1):
     return nn.Sequential(
-        nn.Conv2d(in_planes, out_planes, kernel_size=3, padding=1),
+        nn.Conv2d(in_planes, out_planes, kernel_size=3,
+                  padding=dilation, dilation=dilation),
         nn.ReLU(inplace=True))
 
 
@@ -38,17 +39,19 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(self, skip_num=2, out_planes=3,
-                 upsample='nearset', no_last_down=False):
+                 upsample='nearset', no_last_down=False,
+                 dilation=1):
         super(Decoder, self).__init__()
         self.convs = nn.ModuleList([
-            conv3x3(2048, 1024),
-            conv3x3(1024 * skip_num, 512),
-            conv3x3(512 * skip_num, 256),
-            conv3x3(256 * skip_num, 128),
-            conv3x3(128 * skip_num, 64),
-            conv3x3(64 * skip_num, 32)])
+            conv3x3(2048, 1024, 1 if no_last_down else dilation),
+            conv3x3(1024 * skip_num, 512, dilation),
+            conv3x3(512 * skip_num, 256, dilation),
+            conv3x3(256 * skip_num, 128, dilation),
+            conv3x3(128 * skip_num, 64, dilation),
+            conv3x3(64 * skip_num, 32, dilation)])
         self.last_conv = nn.Conv2d(
-            32 * skip_num, out_planes, kernel_size=3, padding=1)
+            32 * skip_num, out_planes, kernel_size=3,
+            padding=dilation, dilation=dilation)
         self.upsample = upsample
         self.no_last_down = no_last_down
 

@@ -42,6 +42,8 @@ parser.add_argument('--upsample', default='nearest',
 parser.add_argument('--no_last_down', action='store_true',
                     help='remove encoder\'s last downsample '
                          'and directly followed decoder\'s upsample')
+parser.add_argument('--decoder_dilation', default=1, type=int,
+                    help='dilation for decoder')
 # Optimization related arguments
 parser.add_argument('--batch_size_train', default=2, type=int,
                     help='training mini-batch size')
@@ -101,9 +103,11 @@ loader_valid = DataLoader(dataset_valid, args.batch_size_valid,
 # Create model
 encoder = Encoder(args.input_channels, no_last_down=args.no_last_down).to(device)
 edg_decoder = Decoder(skip_num=2, out_planes=3, upsample=args.upsample,
-                      no_last_down=args.no_last_down).to(device)
+                      no_last_down=args.no_last_down,
+                      dilation=args.decoder_dilation).to(device)
 cor_decoder = Decoder(skip_num=3, out_planes=1, upsample=args.upsample,
-                      no_last_down=args.no_last_down).to(device)
+                      no_last_down=args.no_last_down,
+                      dilation=args.decoder_dilation).to(device)
 
 
 # Create optimizer
