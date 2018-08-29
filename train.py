@@ -36,7 +36,13 @@ parser.add_argument('--noise', action='store_true',
                     help='enable noise augmentation')
 parser.add_argument('--num_workers', default=6, type=int,
                     help='numbers of workers for dataloaders')
-# optimization related arguments
+# Model related arguments
+parser.add_argument('--upsample', default='nearest',
+                    help='nearset or bilinear')
+parser.add_argument('--no_last_down', action='store_true',
+                    help='remove encoder\'s last downsample '
+                         'and directly followed decoder\'s upsample')
+# Optimization related arguments
 parser.add_argument('--batch_size_train', default=2, type=int,
                     help='training mini-batch size')
 parser.add_argument('--batch_size_valid', default=2, type=int,
@@ -93,9 +99,11 @@ loader_valid = DataLoader(dataset_valid, args.batch_size_valid,
 
 
 # Create model
-encoder = Encoder(args.input_channels).to(device)
-edg_decoder = Decoder(skip_num=2, out_planes=3).to(device)
-cor_decoder = Decoder(skip_num=3, out_planes=1).to(device)
+encoder = Encoder(args.input_channels, no_last_down=args.no_last_down).to(device)
+edg_decoder = Decoder(skip_num=2, out_planes=3, upsample=args.upsample,
+                      no_last_down=args.no_last_down).to(device)
+cor_decoder = Decoder(skip_num=3, out_planes=1, upsample=args.upsample,
+                      no_last_down=args.no_last_down).to(device)
 
 
 # Create optimizer
