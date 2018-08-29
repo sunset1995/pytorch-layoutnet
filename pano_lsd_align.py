@@ -94,8 +94,9 @@ if __name__ == '__main__':
         [0.7588, -0.6511, 0.0147],
         [0.6509, 0.7590, 0.0159],
         [-0.0183, 0.0012, 0.9998]])
-    img_rotatePanorama_ = rotatePanorama(img_ori, vp)
+    img_rotatePanorama_ = rotatePanorama(img_ori.copy(), vp)
     assert img_rotatePanorama_.shape == img_rotatePanorama.shape
-    print('rotatePanorama: L1 diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).mean())
+    print('rotatePanorama: L1  diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).mean())
+    print('rotatePanorama: max diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).max())
     Image.fromarray(img_rotatePanorama_.round().astype(np.uint8)) \
          .save('test/rotatePanorama_pano_arrsorvpjptpii.out.png')
