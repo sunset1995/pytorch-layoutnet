@@ -2,12 +2,17 @@
 Most of the code are modified from LayoutNet official's matlab code
 in which some of the code are borrowed from PanoContext and PanoBasic
 
+All functions, naming rule and data flow follow official
+for easier converting and comparing.
+Code is not optimized for python or numpy yet.
+
 author: Cheng Sun
 email : s2821d3721@gmail.com
 '''
 import numpy as np
 from scipy.ndimage import map_coordinates
 from pano import coords2uv, uv2xyzN, xyz2uvN, computeUVN
+import cv2
 
 
 def warpImageFast(im, XXdense, YYdense):
@@ -157,7 +162,36 @@ def separatePano(panoImg, fov, x, y, imgSize=320):
     return sepScene
 
 
-def panoEdgeDetection(img, viewSize=320, qError=0.7):
+def lsdWrap(img, LSD=None, **kwargs):
+    '''
+    Opencv implementation of
+    Rafael Grompone von Gioi, Jérémie Jakubowicz, Jean-Michel Morel, and Gregory Randall,
+    LSD: a Line Segment Detector, Image Processing On Line, vol. 2012.
+    [Rafael12] http://www.ipol.im/pub/art/2012/gjmr-lsd/?utm_source=doi
+    @img
+        input image
+    @LSD
+        Constructing by cv2.createLineSegmentDetector
+        https://docs.opencv.org/3.0-beta/modules/imgproc/doc/feature_detection.html#linesegmentdetector
+        if LSD is given, kwargs will be ignored
+    @kwargs
+        is used to construct LSD
+        work only if @LSD is not given
+    '''
+    if LSD is None:
+        LSD = cv2.createLineSegmentDetector(**kwargs)
+
+    if len(img.shape) == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+    lines, width, prec, nfa = LSD.detect(img)
+    lines = np.squeeze(lines, 1)
+    edgeList = np.concatenate([lines, width, prec, nfa], 1)
+    edgeMap = LSD.drawSegments(np.zeros_like(img), lines)[..., -1]
+    return edgeMap, edgeList
+
+
+def panoEdgeDetection(img, viewSize=320, qError=2.0):
     '''
     line detection on panorama
        INPUT:
@@ -181,23 +215,39 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
     y = np.concatenate([yh, yp, [np.pi/2., -np.pi/2]])
 
     sepScene = separatePano(img.copy(), fov, x, y, cutSize)
+    for i in range(len(sepScene)):
+        Image.fromarray(sepScene[i]['img']).save('test/edgeMap/%02d_scene_.png' % (i+1))
+    edge = []
+    LSD = cv2.createLineSegmentDetector(_refine=cv2.LSD_REFINE_ADV, _quant=qError)
+    for i, scene in enumerate(sepScene):
+        edgeMap, edgeList = lsdWrap(scene['img'], LSD)
+        Image.fromarray(edgeMap).save('test/edgeMap/%02d.out.png' % (i+1))
+        edge.append({
+            'img': edgeMap,
+            'edgeLst': edgeList,
+            'vx': scene['vx'],
+            'vy': scene['vy'],
+            'fov': scene['fov'],
+        })
+        # edge[-1]['panoLst'] = edgeFromImg2Pano(edge[-1])
 
 
 if __name__ == '__main__':
 
     from PIL import Image
-    img_ori = np.array(Image.open('test/pano_arrsorvpjptpii.png'))
+    img_ori = Image.open('test/pano_arrsorvpjptpii.jpg')
 
     # Test separatePano
-    panoEdgeDetection(img_ori.copy())
+    panoEdgeDetection(np.array(img_ori))
 
     # Test rotatePanorama
     img_rotatePanorama = np.array(Image.open('test/rotatePanorama_pano_arrsorvpjptpii.png'))
     vp = np.array([
-        [0.7588, -0.6511, 0.0147],
-        [0.6509, 0.7590, 0.0159],
-        [-0.0183, 0.0012, 0.9998]])
-    img_rotatePanorama_ = rotatePanorama(img_ori.copy(), vp)
+        [0.758831, -0.651121, 0.014671],
+        [0.650932, 0.758969, 0.015869],
+        [-0.018283, 0.001220, 0.999832]])
+    img_rotatePanorama_ = rotatePanorama(np.array(img_ori.resize((2048, 1024))) / 255.0, vp)
+    img_rotatePanorama_ = (img_rotatePanorama_ * 255.0).round()
     assert img_rotatePanorama_.shape == img_rotatePanorama.shape
     print('rotatePanorama: L1  diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).mean())
     print('rotatePanorama: max diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).max())
