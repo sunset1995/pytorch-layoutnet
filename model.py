@@ -40,7 +40,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, skip_num=2, out_planes=3,
                  upsample='nearset', no_last_down=False,
-                 dilation=1):
+                 dilation=1, aspp=False):
         super(Decoder, self).__init__()
         self.convs = nn.ModuleList([
             conv3x3(2048, 1024, 1 if no_last_down else dilation),
@@ -49,11 +49,18 @@ class Decoder(nn.Module):
             conv3x3(256 * skip_num, 128, dilation),
             conv3x3(128 * skip_num, 64, dilation),
             conv3x3(64 * skip_num, 32, dilation)])
-        self.last_conv = nn.Conv2d(
-            32 * skip_num, out_planes, kernel_size=3,
-            padding=dilation, dilation=dilation)
+        if aspp:
+            self.last_conv = nn.ModuleList([
+                nn.Conv2d(32 * skip_num, out_planes, kernel_size=3,
+                          padding=d, dilation=d)
+                for d in [2, 3, 6, 12, 18, 24]])
+        else:
+            self.last_conv = nn.Conv2d(
+                32 * skip_num, out_planes, kernel_size=3,
+                padding=dilation, dilation=dilation)
         self.upsample = upsample
         self.no_last_down = no_last_down
+        self.aspp = aspp
 
     def forward(self, f_list):
         conv_out = []
@@ -68,9 +75,12 @@ class Decoder(nn.Module):
             f_last = conv(f_last)
             f_last = torch.cat([f_last, f], dim=1)
             conv_out.append(f_last)
-        conv_out.append(self.last_conv(F.interpolate(
-            f_last, scale_factor=2,
-            mode=self.upsample)))
+        f_last = F.interpolate(f_last, scale_factor=2,
+                               mode=self.upsample)
+        if self.aspp:
+            conv_out.append(sum(conv(f_last) for conv in self.last_conv))
+        else:
+            conv_out.append(self.last_conv(f_last))
         return conv_out
 
 
