@@ -404,6 +404,7 @@ def panoEdgeDetection(img, viewSize=320, qError=2.0):
 
 if __name__ == '__main__':
 
+    import PIL
     from PIL import Image
     img_ori = Image.open('test/pano_arrsorvpjptpii.jpg')
 
@@ -416,10 +417,13 @@ if __name__ == '__main__':
         [0.758831, -0.651121, 0.014671],
         [0.650932, 0.758969, 0.015869],
         [-0.018283, 0.001220, 0.999832]])
-    img_rotatePanorama_ = rotatePanorama(np.array(img_ori.resize((2048, 1024))) / 255.0, vp)
+    img_rotatePanorama_ = rotatePanorama(np.array(img_ori.resize((2048, 1024), PIL.Image.BICUBIC)) / 255.0, vp)
     img_rotatePanorama_ = (img_rotatePanorama_ * 255.0).round()
+    img_rotatePanorama_diff = np.abs(img_rotatePanorama - img_rotatePanorama_.round())
     assert img_rotatePanorama_.shape == img_rotatePanorama.shape
-    print('rotatePanorama: L1  diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).mean())
-    print('rotatePanorama: max diff', np.abs(img_rotatePanorama - img_rotatePanorama_.round()).max())
+    print('rotatePanorama: L1  diff', img_rotatePanorama_diff.mean())
+    print('rotatePanorama: max diff', img_rotatePanorama_diff.max())
     Image.fromarray(img_rotatePanorama_.round().astype(np.uint8)) \
          .save('test/rotatePanorama_pano_arrsorvpjptpii.out.png')
+    Image.fromarray(img_rotatePanorama_diff.astype(np.uint8)) \
+         .save('test/rotatePanorama_pano_arrsorvpjptpii.diff.png')
