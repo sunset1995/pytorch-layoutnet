@@ -8,10 +8,10 @@ from pano import find_N_peaks
 
 from PIL import Image
 
-
-DATA_DIR = 'data'
-ORGIN_DATA_DIR = os.path.join('data', 'origin', 'data')
-ORGIN_GT_DIR = os.path.join('data', 'origin', 'gt')
+ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+ORGIN_DATA_DIR = os.path.join(DATA_DIR, 'origin', 'data')
+ORGIN_GT_DIR = os.path.join(DATA_DIR, 'origin', 'gt')
 
 
 # Variables for train/val/test split
@@ -23,9 +23,9 @@ train_pats = [
 valid_pats = ['panoContext_%s_val.t7', 'stanford2d-3d_%s_area_3.t7']
 test_pats = ['panoContext_%s_test.t7', 'stanford2d-3d_%s_area_5.t7']
 
-train_pano_map = os.path.join('data', 'panoContext_trainmap.txt')
-valid_pano_map = os.path.join('data', 'panoContext_valmap.txt')
-test_pano_map = os.path.join('data', 'panoContext_testmap.txt')
+train_pano_map = os.path.join(DATA_DIR, 'panoContext_trainmap.txt')
+valid_pano_map = os.path.join(DATA_DIR, 'panoContext_valmap.txt')
+test_pano_map = os.path.join(DATA_DIR, 'panoContext_testmap.txt')
 
 
 def cvt2png(target_dir, patterns, pano_map_path):
@@ -42,7 +42,7 @@ def cvt2png(target_dir, patterns, pano_map_path):
             else:
                 gt_path = os.path.join(
                     ORGIN_GT_DIR, 'panoContext_%s.txt' % pat.split('_')[-1].split('.')[0])
-            assert os.path.isfile(th_path), '%s not found !!!' % gt_path
+            assert os.path.isfile(gt_path), '%s not found !!!' % gt_path
 
             # Parse file names from gt list
             with open(gt_path) as f:
@@ -89,7 +89,7 @@ for split in ['test', 'valid', 'train']:
     target_dir = os.path.join(DATA_DIR, split, 'label_cor')
     os.makedirs(target_dir, exist_ok=True)
 
-    # Kernel used to extract corner position from gt corner map 
+    # Kernel used to extract corner position from gt corner map
     kernel = np.array([
         [0, 1, 0],
         [1, 1, 1],
