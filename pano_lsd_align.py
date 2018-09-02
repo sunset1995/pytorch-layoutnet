@@ -185,9 +185,9 @@ def lsdWrap(img, LSD=None, **kwargs):
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     lines, width, prec, nfa = LSD.detect(img)
+    edgeMap = LSD.drawSegments(np.zeros_like(img), lines)[..., -1]
     lines = np.squeeze(lines, 1)
     edgeList = np.concatenate([lines, width, prec, nfa], 1)
-    edgeMap = LSD.drawSegments(np.zeros_like(img), lines)[..., -1]
     return edgeMap, edgeList
 
 
@@ -416,16 +416,139 @@ def icosahedron2sphere(level):
     return np.array(coor), np.array(tri)
 
 
+def curveFitting(inputXYZ, weight):
+    '''
+    @inputXYZ: N x 3
+    @weight  : N x 1
+    '''
+    l = np.sqrt(np.sum(inputXYZ ** 2, 1, keepdims=True))
+    inputXYZ = inputXYZ / np.tile(l, [1, 3])
+    weightXYZ = inputXYZ * np.tile(weight, [1, 3])
+    XX = np.sum(weightXYZ[:, 0] ** 2)
+    YY = np.sum(weightXYZ[:, 1] ** 2)
+    ZZ = np.sum(weightXYZ[:, 2] ** 2)
+    XY = np.sum(weightXYZ[:, 0] * weightXYZ[:, 1])
+    YZ = np.sum(weightXYZ[:, 1] * weightXYZ[:, 2])
+    ZX = np.sum(weightXYZ[:, 2] * weightXYZ[:, 0])
+
+    A = np.array([
+        [XX, XY, ZX],
+        [XY, YY, YZ],
+        [ZX, YZ, ZZ]])
+    U, S, Vh = np.linalg.svd(A)
+    V = Vh.T
+    outputNM = V[:, -1].T
+    outputNM = outputNM / np.linalg.norm(outputNM)
+
+    return outputNM
+
+
+def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, candiSet, force_unempty=True):
+    # initial guess
+    numLinesg = len(segNormal)
+
+    voteBinPoints = candiSet.copy()
+    voteBinPoints = voteBinPoints[~(voteBinPoints[:,2] < 0)]
+    reversValid = (segNormal[:, 2] < 0).reshape(-1)
+    segNormal[reversValid] = -segNormal[reversValid]
+
+    voteBinUV = xyz2uvN(voteBinPoints)
+    numVoteBin = len(voteBinPoints)
+    voteBinValues = np.zeros(numVoteBin)
+    for i in range(numLinesg):
+        tempNorm = segNormal[[i]]
+        tempDots = (voteBinPoints * np.tile(tempNorm, [numVoteBin, 1])).sum(1)
+        
+        valid = np.abs(tempDots) < np.cos((90 - binRadius) * np.pi / 180)
+
+        voteBinValues[valid] = voteBinValues[valid] + segScores[i] * segLength[i]
+
+    checkIDs1 = np.nonzero(voteBinUV[:, [1]] > np.pi / 3)[0]
+    voteMax = 0
+    checkID1Max = 0
+    checkID2Max = 0
+    checkID3Max = 0
+
+    for j in range(len(checkIDs1)):
+        checkID1 = checkIDs1[j]
+        vote1 = voteBinValues[checkID1]
+        if voteBinValues[checkID1] == 0 and force_unempty:
+            continue        
+        checkNormal = voteBinPoints[[checkID1]]
+        dotProduct = (voteBinPoints * np.tile(checkNormal, [len(voteBinPoints), 1])).sum(1)
+        checkIDs2 = np.nonzero(np.abs(dotProduct) < np.cos((90 - orthTolerance) * np.pi / 180))[0]
+
+        for i in range(len(checkIDs2)):
+            checkID2 = checkIDs2[i]
+            if voteBinValues[checkID2] == 0 and force_unempty:
+                continue
+            vote2 = vote1 + voteBinValues[checkID2]
+            cpv = np.cross(voteBinPoints[checkID1], voteBinPoints[checkID2]).reshape(1, 3)
+            cpn = np.sqrt(np.sum(cpv ** 2))
+            dotProduct = (voteBinPoints * np.tile(cpv, [len(voteBinPoints), 1])).sum(1) / cpn
+            checkIDs3 = np.nonzero(np.abs(dotProduct) > np.cos(orthTolerance * np.pi / 180))[0]    
+
+            for k in range(len(checkIDs3)):
+                checkID3 = checkIDs3[k]
+                if voteBinValues[checkID3] == 0 and force_unempty:
+                    continue
+                vote3 = vote2 + voteBinValues[checkID3]
+                if vote3 > voteMax:
+                    lastStepCost = vote3 - voteMax
+                    if voteMax != 0:
+                        tmp = (voteBinPoints[[checkID1Max, checkID2Max, checkID3Max]] * \
+                               voteBinPoints[[checkID1, checkID2, checkID3]]).sum(1)
+                        lastStepAngle = np.arccos(tmp)
+                    else:
+                        lastStepAngle = np.zeros(3)
+                                         
+                    checkID1Max = checkID1
+                    checkID2Max = checkID2
+                    checkID3Max = checkID3               
+                                               
+                    voteMax = vote3
+
+    if checkID1Max == 0:
+        print('Warning: No orthogonal voting exist!!!')
+        return None, 0, 0
+    initXYZ = voteBinPoints[[checkID1Max, checkID2Max, checkID3Max]]
+
+    # refine
+    refiXYZ = np.zeros((3, 3))
+    dotprod = (segNormal * np.tile(initXYZ[[0]], [len(segNormal), 1])).sum(1)
+    valid = np.abs(dotprod) < np.cos((90 - binRadius) * np.pi / 180)
+    validNm = segNormal[valid]
+    validWt = segLength[valid] * segScores[valid]
+    validWt = validWt / validWt.max()
+    refiNM = curveFitting(validNm, validWt)
+    refiXYZ[0] = refiNM.copy()
+
+    dotprod = (segNormal * np.tile(initXYZ[[1]], [len(segNormal), 1])).sum(1)
+    valid = np.abs(dotprod) < np.cos((90 - binRadius) * np.pi / 180)
+    validNm = segNormal[valid]
+    validWt = segLength[valid] * segScores[valid]
+    validWt = validWt / validWt.max()
+    validNm = np.vstack([validNm, refiXYZ[[0]]])
+    validWt = np.vstack([validWt, validWt.sum(0, keepdims=1) * 0.1])
+    refiNM = curveFitting(validNm, validWt)
+    refiXYZ[1] = refiNM.copy()
+
+    refiNM = np.cross(refiXYZ[0], refiXYZ[1])
+    refiXYZ[2] = refiNM / np.linalg.norm(refiNM)
+
+    return refiXYZ, lastStepCost, lastStepAngle
+
+
 def findMainDirectionEMA(lines):
     '''compute vp from set of lines'''
     print('Computing vanishing point', end='')
 
     # initial guess
     segNormal = lines[:, :3]
-    segLength = lines[:, 6]
+    segLength = lines[:, [6]]
     segScores = np.ones((len(lines), 1))
 
-    shortSegValid = (segLength < 5 * np.pi / 180)
+    shortSegValid = (segLength < 5 * np.pi / 180).reshape(-1)
     segNormal = segNormal[~shortSegValid, :]
     segLength = segLength[~shortSegValid]
     segScores = segScores[~shortSegValid]
@@ -435,21 +558,17 @@ def findMainDirectionEMA(lines):
     ang = np.arccos((candiSet[tri[0,0]] * candiSet[tri[0,1]]).sum()) / np.pi * 180
     binRadius = ang / 2
     initXYZ, score, angle = sphereHoughVote(segNormal, segLength, segScores, 2*binRadius, 2, candiSet)
-    import sys; sys.exit()
 
-    # if isempty(initXYZ)
-    #     fprintf('Initial Failed\n');
-    #     mainDirect = [];
-    #     return;
-    # end
+    if initXYZ is None:
+        print('Initial Failed')
+        return None, score, angle
 
-    # fprintf('Initial Computation: %d candidates, %d line segments\n', size(candiSet,1), numLinesg);
-    # fprintf('direction 1: %f %f %f\ndirection 2: %f %f %f\ndirection 3: %f %f %f\n', ...
-    #         initXYZ(1,1), initXYZ(1,2), initXYZ(1,3), ...
-    #         initXYZ(2,1), initXYZ(2,2), initXYZ(2,3), ...
-    #         initXYZ(3,1), initXYZ(3,2), initXYZ(3,3));
-    # %% iterative refine
-    # iter_max = 3;
+    print('Initial Computation: %d candidates, %d line segments' % (len(candiSet), numLinesg))
+    print('direction 1:', initXYZ[0])
+    print('direction 2:', initXYZ[1])
+    print('direction 3:', initXYZ[2])
+    # iterative refine
+    iter_max = 3
     # [candiSet, tri] = icosahedron2sphere(5);
     # numCandi = size(candiSet,1);
     # angD = acos(dot(candiSet(tri(1,1),:), candiSet(tri(1,2),:), 2)) / pi * 180;
@@ -500,10 +619,9 @@ def findMainDirectionEMA(lines):
     #     fprintf('%d-th iteration: %d candidates, %d line segments\n', iter, size(subCandiSet,1), length(subSegScores));
 
     # end
-    # fprintf('direction 1: %f %f %f\ndirection 2: %f %f %f\ndirection 3: %f %f %f\n', ...
-    #         curXYZ(1,1), curXYZ(1,2), curXYZ(1,3), ...
-    #         curXYZ(2,1), curXYZ(2,2), curXYZ(2,3), ...
-    #         curXYZ(3,1), curXYZ(3,2), curXYZ(3,3));
+    print('direction 1:', initXYZ[0])
+    print('direction 2:', initXYZ[1])
+    print('direction 3:', initXYZ[2])
     # mainDirect = curXYZ;
 
     # mainDirect(1,:) = mainDirect(1,:).*sign(mainDirect(1,3));
