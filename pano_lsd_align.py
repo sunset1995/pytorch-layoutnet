@@ -304,8 +304,9 @@ def combineEdgesN(edges):
             ori_lines[i, 4:6] = np.array([umax, umin]) / 2 / np.pi
         else:
             ori_lines[i, 4:6] = np.array([umin, umax]) / 2 / np.pi
-        ori_lines[i, 6] = np.arccos(
-            np.dot(coord1, coord2) / (np.linalg.norm(coord1) * np.linalg.norm(coord2)))
+        ori_lines[i, 6] = np.arccos((
+            np.dot(coord1, coord2) / (np.linalg.norm(coord1) * np.linalg.norm(coord2))
+            ).clip(-1, 1))
         ori_lines[i, 7] = arcList[i, 9]
 
     # additive combination
@@ -347,7 +348,7 @@ def combineEdgesN(edges):
                 u = np.array([[nrmin], [nrmax]]) * 2 * np.pi - np.pi
                 v = computeUVN(nc, u, lines[i, 3])
                 xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
-                l = np.arccos(np.dot(xyz[0, :], xyz[1, :]))
+                l = np.arccos(np.dot(xyz[0, :], xyz[1, :]).clip(-1, 1))
                 scr = (lines[i,6]*lines[i,7] + lines[j,6]*lines[j,7]) / (lines[i,6]+lines[j,6])
 
                 newLine = np.array([*nc, lines[i, 3], nrmin, nrmax, l, scr])
@@ -555,7 +556,7 @@ def findMainDirectionEMA(lines):
 
     numLinesg = len(segNormal)
     candiSet, tri = icosahedron2sphere(3)
-    ang = np.arccos((candiSet[tri[0,0]] * candiSet[tri[0,1]]).sum()) / np.pi * 180
+    ang = np.arccos((candiSet[tri[0,0]] * candiSet[tri[0,1]]).sum().clip(-1, 1)) / np.pi * 180
     binRadius = ang / 2
     initXYZ, score, angle = sphereHoughVote(segNormal, segLength, segScores, 2*binRadius, 2, candiSet)
 
@@ -572,7 +573,7 @@ def findMainDirectionEMA(lines):
     iter_max = 3
     candiSet, tri = icosahedron2sphere(5)
     numCandi = len(candiSet)
-    angD = np.arccos((candiSet[tri[0, 0]] * candiSet[tri[0, 1]]).sum()) / np.pi * 180
+    angD = np.arccos((candiSet[tri[0, 0]] * candiSet[tri[0, 1]]).sum().clip(-1, 1)) / np.pi * 180
     binRadiusD = angD / 2
     curXYZ = initXYZ.copy()
     tol = np.linspace(4*binRadius, 4*binRadiusD, iter_max)  # shrink down ls and candi
