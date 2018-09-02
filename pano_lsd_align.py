@@ -390,11 +390,12 @@ def icosahedron2sphere(level):
     tri = idx.reshape(3, 20, order='F').T
 
     # extrude
-    coor = list(coor / np.tile(np.sqrt(np.sum(coor * coor, 1)), (1, 3)))
+    coor = list(coor / np.tile(np.sqrt(np.sum(coor * coor, 1, keepdims=True)), (1, 3)))
 
     for _ in range(level):
         triN = []
         for t in range(len(tri)):
+            n = len(coor)
             coor.append((coor[tri[t, 0]] + coor[tri[t, 1]]) / 2)
             coor.append((coor[tri[t, 1]] + coor[tri[t, 2]]) / 2)
             coor.append((coor[tri[t, 2]] + coor[tri[t, 0]]) / 2)
@@ -410,7 +411,7 @@ def icosahedron2sphere(level):
         tri = idx[tri]
 
         # extrude
-        coor = list(coor / np.tile(np.sqrt(np.sum(coor * coor, 1)), (1, 3)))
+        coor = list(coor / np.tile(np.sqrt(np.sum(coor * coor, 1, keepdims=True)), (1, 3)))
 
     return np.array(coor), np.array(tri)
 
@@ -431,13 +432,10 @@ def findMainDirectionEMA(lines):
 
     numLinesg = len(segNormal)
     candiSet, tri = icosahedron2sphere(3)
-    print(candiSet)
-    print(tri)
-    print(candiSet.shape, tri.shape)
+    ang = np.arccos((candiSet[tri[0,0]] * candiSet[tri[0,1]]).sum()) / np.pi * 180
+    binRadius = ang / 2
+    initXYZ, score, angle = sphereHoughVote(segNormal, segLength, segScores, 2*binRadius, 2, candiSet)
     import sys; sys.exit()
-    # ang = acos(dot(candiSet(tri(1,1),:), candiSet(tri(1,2),:), 2)) / pi * 180;
-    # binRadius = ang/2;
-    # [ initXYZ, score, angle] = sphereHoughVote( segNormal, segLength, segScores, 2*binRadius, 2, candiSet );
 
     # if isempty(initXYZ)
     #     fprintf('Initial Failed\n');
@@ -530,7 +528,7 @@ def findMainDirectionEMA(lines):
 
 
 
-def panoEdgeDetection(img, viewSize=320, qError=2.0):
+def panoEdgeDetection(img, viewSize=320, qError=0.7):
     '''
     line detection on panorama
        INPUT:
@@ -581,7 +579,24 @@ if __name__ == '__main__':
 
     import PIL
     from PIL import Image
+    from scipy.io import loadmat
     img_ori = Image.open('test/pano_arrsorvpjptpii.jpg')
+
+    # Test icosahedron2sphere
+    i3 = loadmat('test/i3.mat')['i3']
+    i3_idx = loadmat('test/i3_idx.mat')['i3_idx']
+    i5 = loadmat('test/i5.mat')['i5']
+    i5_idx = loadmat('test/i5_idx.mat')['i5_idx']
+    i3_, i3_idx_ = icosahedron2sphere(3)
+    i5_, i5_idx_ = icosahedron2sphere(5)
+    assert i3.shape == i3_.shape
+    assert i3_idx.shape == i3_idx_.shape
+    assert i5.shape == i5_.shape
+    assert i5_idx.shape == i5_idx_.shape
+    assert (i3 != i3_).sum() == 0
+    assert (i5 != i5_).sum() == 0
+    assert (i3_idx - 1 != i3_idx_).sum() == 0
+    assert (i5_idx - 1 != i5_idx_).sum() == 0
 
     # Test separatePano
     panoEdgeDetection(np.array(img_ori))
