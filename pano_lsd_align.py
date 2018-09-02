@@ -642,6 +642,40 @@ def findMainDirectionEMA(lines):
     return mainDirect, score, angle
 
 
+def assignVanishingType(lines, vp, tol, area=10):
+    numLine = len(lines)
+    numVP = len(vp)
+    typeCost = np.zeros((numLine, numVP))
+    # perpendicular 
+    for vid in range(numVP):
+        cosint = (lines[:, :3] * np.tile(vp[[vid]], [numLine, 1])).sum(1)
+        typeCost[:, vid] = np.arcsin(np.abs(cosint).clip(-1, 1))
+
+    # infinity
+    for vid in range(numVP):
+        valid = np.ones(numLine, bool)
+        for i in range(numLine):
+            us = lines[i, 4]
+            ue = lines[i, 5]
+            u = np.array([[us], [ue]]) * 2 * np.pi - np.pi
+            v = computeUVN(lines[i, :3], u, lines[i, 3])
+            xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
+            x = np.linspace(xyz[0, 0], xyz[1, 0], 100).reshape(-1, 1)
+            y = np.linspace(xyz[0, 1], xyz[1, 1], 100).reshape(-1, 1)
+            z = np.linspace(xyz[0, 2], xyz[1, 2], 100).reshape(-1, 1)
+            xyz = np.hstack([x, y, z])
+            print(xyz)
+            xyz = xyz / np.tile(np.sqrt(np.sum(xyz ** 2, 1, keepdims=True)), [1, 3])
+            ang = np.arccos(np.abs((xyz * np.tile(vp[[vid]], [100, 1])).sum(1)).clip(-1, 1))
+            valid[i] = ~np.any(ang < area * np.pi / 180)
+        typeCost[~valid, vid] = 100
+
+    I = typeCost.min(1)
+    tp = typeCost.argmin(1)
+    tp[I > tol] = numVP + 1
+
+    return tp, typeCost
+
 
 def panoEdgeDetection(img, viewSize=320, qError=0.7):
     '''
@@ -688,6 +722,33 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
     for _ in range(3):
         print(('%d-th iteration' % _).center(50, '*'))
         mainDirect, score, angle = findMainDirectionEMA(clines)
+
+        tp, typeCost = assignVanishingType(lines, mainDirect[:3], 0.1, 10)
+        lines1 = lines[tp==0]
+        lines2 = lines[tp==1]
+        lines3 = lines[tp==2]
+        
+        # lines1rB = refitLineSegmentB(lines1, mainDirect(1,:), 0);
+        # lines2rB = refitLineSegmentB(lines2, mainDirect(2,:), 0);
+        # lines3rB = refitLineSegmentB(lines3, mainDirect(3,:), 0);
+        
+    #     clines = [lines1rB;lines2rB;lines3rB];
+    # end
+
+    # imgres = zeros(size(img));
+    # panoEdge1r = paintParameterLine( lines1rB, 1024, 512, imgres);
+    # panoEdge2r = paintParameterLine( lines2rB, 1024, 512, imgres);
+    # panoEdge3r = paintParameterLine( lines3rB, 1024, 512, imgres);
+    # panoEdger = cat(3, panoEdge1r, panoEdge2r, panoEdge3r);
+
+    # output
+    olines = clines.copy()
+    vp = mainDirect.copy()
+    views = sepScene.copy()
+    edges = edge.copy()
+    panoEdge = panoEdger.copy()
+
+    return olines, vp, views, edges, panoEdge, score, angle
 
 
 if __name__ == '__main__':
