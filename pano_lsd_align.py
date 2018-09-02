@@ -498,7 +498,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
                     if voteMax != 0:
                         tmp = (voteBinPoints[[checkID1Max, checkID2Max, checkID3Max]] * \
                                voteBinPoints[[checkID1, checkID2, checkID3]]).sum(1)
-                        lastStepAngle = np.arccos(tmp)
+                        lastStepAngle = np.arccos(tmp.clip(-1, 1))
                     else:
                         lastStepAngle = np.zeros(3)
                                          
@@ -541,7 +541,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
 
 def findMainDirectionEMA(lines):
     '''compute vp from set of lines'''
-    print('Computing vanishing point', end='')
+    print('Computing vanishing point')
 
     # initial guess
     segNormal = lines[:, :3]
@@ -564,83 +564,79 @@ def findMainDirectionEMA(lines):
         return None, score, angle
 
     print('Initial Computation: %d candidates, %d line segments' % (len(candiSet), numLinesg))
-    print('direction 1:', initXYZ[0])
-    print('direction 2:', initXYZ[1])
-    print('direction 3:', initXYZ[2])
+    print('direction 1: %.6f %.6f %.6f' % tuple(initXYZ[0]))
+    print('direction 2: %.6f %.6f %.6f' % tuple(initXYZ[1]))
+    print('direction 3: %.6f %.6f %.6f' % tuple(initXYZ[2]))
+
     # iterative refine
     iter_max = 3
-    # [candiSet, tri] = icosahedron2sphere(5);
-    # numCandi = size(candiSet,1);
-    # angD = acos(dot(candiSet(tri(1,1),:), candiSet(tri(1,2),:), 2)) / pi * 180;
-    # binRadiusD = angD/2;
-    # curXYZ = initXYZ;
-    # tol = linspace(4*binRadius, 4*binRadiusD, iter_max); % shrink down #ls and #candi
-    # for iter = 1:iter_max
-    #     dot1 = abs(dot( segNormal, repmat(curXYZ(1,:), [numLinesg 1]), 2));
-    #     dot2 = abs(dot( segNormal, repmat(curXYZ(2,:), [numLinesg 1]), 2));
-    #     dot3 = abs(dot( segNormal, repmat(curXYZ(3,:), [numLinesg 1]), 2));
-    #     valid1 = dot1<cos((90-tol(iter))*pi/180);
-    #     valid2 = dot2<cos((90-tol(iter))*pi/180);
-    #     valid3 = dot3<cos((90-tol(iter))*pi/180);
-    #     valid = valid1 | valid2 | valid3;
+    candiSet, tri = icosahedron2sphere(5)
+    numCandi = len(candiSet)
+    angD = np.arccos((candiSet[tri[0, 0]] * candiSet[tri[0, 1]]).sum()) / np.pi * 180
+    binRadiusD = angD / 2
+    curXYZ = initXYZ.copy()
+    tol = np.linspace(4*binRadius, 4*binRadiusD, iter_max)  # shrink down ls and candi
+    for it in range(iter_max):
+        dot1 = np.abs((segNormal * np.tile(curXYZ[[0]], [numLinesg, 1])).sum(1))
+        dot2 = np.abs((segNormal * np.tile(curXYZ[[1]], [numLinesg, 1])).sum(1))
+        dot3 = np.abs((segNormal * np.tile(curXYZ[[2]], [numLinesg, 1])).sum(1))
+        valid1 = dot1 < np.cos((90 - tol[it]) * np.pi / 180)
+        valid2 = dot2 < np.cos((90 - tol[it]) * np.pi / 180)
+        valid3 = dot3 < np.cos((90 - tol[it]) * np.pi / 180)
+        valid = valid1 | valid2 | valid3
         
-    #     if(sum(valid)==0)
-    #         fprintf('ZERO line segment for voting\n');
-    #         break;
-    #     end
+        if np.sum(valid) == 0:
+            print('ZERO line segment for voting')
+            break
         
-    #     subSegNormal = segNormal(valid,:);
-    #     subSegLength = segLength(valid);
-    #     subSegScores = segScores(valid);
+        subSegNormal = segNormal[valid]
+        subSegLength = segLength[valid]
+        subSegScores = segScores[valid]
         
-    #     dot1 = abs(dot( candiSet, repmat(curXYZ(1,:), [numCandi 1]), 2));
-    #     dot2 = abs(dot( candiSet, repmat(curXYZ(2,:), [numCandi 1]), 2));
-    #     dot3 = abs(dot( candiSet, repmat(curXYZ(3,:), [numCandi 1]), 2));
-    #     valid1 = dot1>cos(tol(iter)*pi/180);
-    #     valid2 = dot2>cos(tol(iter)*pi/180);
-    #     valid3 = dot3>cos(tol(iter)*pi/180);
-    #     valid = valid1 | valid2 | valid3;
+        dot1 = np.abs((candiSet * np.tile(curXYZ[[0]], [numCandi, 1])).sum(1))
+        dot2 = np.abs((candiSet * np.tile(curXYZ[[1]], [numCandi, 1])).sum(1))
+        dot3 = np.abs((candiSet * np.tile(curXYZ[[2]], [numCandi, 1])).sum(1))
+        valid1 = dot1 > np.cos(tol[it] * np.pi / 180)
+        valid2 = dot2 > np.cos(tol[it] * np.pi / 180)
+        valid3 = dot3 > np.cos(tol[it] * np.pi / 180)
+        valid = valid1 | valid2 | valid3;
         
-    #     if(sum(valid)==0)
-    #         fprintf('ZERO candidate for voting\n');
-    #         break;
-    #     end
+        if np.sum(valid) == 0:
+            print('ZERO line segment for voting')
+            break
            
-    #     subCandiSet = candiSet(valid,:);
+        subCandiSet = candiSet[valid]
         
-    #     [ tcurXYZ ] = sphereHoughVote( subSegNormal, subSegLength, subSegScores, 2*binRadiusD, 2, subCandiSet );
+        tcurXYZ, _, _ = sphereHoughVote(subSegNormal, subSegLength, subSegScores, 2*binRadiusD, 2, subCandiSet)
         
-    #     if(isempty(tcurXYZ))
-    #         fprintf('NO answer found!\n');
-    #         break;
-    #     end
-    #     curXYZ = tcurXYZ;
+        if tcurXYZ is None:
+            print('NO answer found!')
+            break
+        curXYZ = tcurXYZ.copy()
 
-    #     fprintf('%d-th iteration: %d candidates, %d line segments\n', iter, size(subCandiSet,1), length(subSegScores));
+        print('%d-th iteration: %d candidates, %d line segments' % (it, len(subCandiSet), len(subSegScores)))
+    print('direction 1: %.6f %.6f %.6f' % tuple(curXYZ[0]))
+    print('direction 2: %.6f %.6f %.6f' % tuple(curXYZ[1]))
+    print('direction 3: %.6f %.6f %.6f' % tuple(curXYZ[2]))
+    mainDirect = curXYZ.copy()
 
-    # end
-    print('direction 1:', initXYZ[0])
-    print('direction 2:', initXYZ[1])
-    print('direction 3:', initXYZ[2])
-    # mainDirect = curXYZ;
+    mainDirect[0] = mainDirect[0] * np.sign(mainDirect[0,2])
+    mainDirect[1] = mainDirect[1] * np.sign(mainDirect[1,2])
+    mainDirect[2] = mainDirect[2] * np.sign(mainDirect[2,2])
 
-    # mainDirect(1,:) = mainDirect(1,:).*sign(mainDirect(1,3));
-    # mainDirect(2,:) = mainDirect(2,:).*sign(mainDirect(2,3));
-    # mainDirect(3,:) = mainDirect(3,:).*sign(mainDirect(3,3));
+    uv = xyz2uvN(mainDirect)
+    I1 = np.argmax(uv[:,1])
+    J = np.setdiff1d(np.arange(3), I1)
+    I2 = np.argmin(np.abs(np.sin(uv[J,0])))
+    I2 = J[I2]
+    I3 = np.setdiff1d(np.arange(3), np.hstack([I1, I2]))
+    mainDirect = np.vstack([mainDirect[I1], mainDirect[I2], mainDirect[I3]])
 
-    # uv = xyz2uvN(mainDirect);
-    # [~,I1] = max(uv(:,2));
-    # J = setdiff(1:3, I1);
-    # [~,I2] = min(abs(sin(uv(J,1))));
-    # I2 = J(I2);
-    # I3 = setdiff(1:3, [I1 I2]);
-    # mainDirect = [mainDirect(I1,:); mainDirect(I2,:); mainDirect(I3,:)];
+    mainDirect[0] = mainDirect[0] * np.sign(mainDirect[0,2])
+    mainDirect[1] = mainDirect[1] * np.sign(mainDirect[1,1])
+    mainDirect[2] = mainDirect[2] * np.sign(mainDirect[2,0])
 
-    # mainDirect(1,:) = mainDirect(1,:)*sign(mainDirect(1,3));
-    # mainDirect(2,:) = mainDirect(2,:)*sign(mainDirect(2,2));
-    # mainDirect(3,:) = mainDirect(3,:)*sign(mainDirect(3,1));
-
-    # mainDirect = [mainDirect; -mainDirect];
+    mainDirect = np.vstack([mainDirect, -mainDirect])
 
     return mainDirect, score, angle
 
