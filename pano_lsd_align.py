@@ -664,7 +664,6 @@ def assignVanishingType(lines, vp, tol, area=10):
             y = np.linspace(xyz[0, 1], xyz[1, 1], 100).reshape(-1, 1)
             z = np.linspace(xyz[0, 2], xyz[1, 2], 100).reshape(-1, 1)
             xyz = np.hstack([x, y, z])
-            print(xyz)
             xyz = xyz / np.tile(np.sqrt(np.sum(xyz ** 2, 1, keepdims=True)), [1, 3])
             ang = np.arccos(np.abs((xyz * np.tile(vp[[vid]], [100, 1])).sum(1)).clip(-1, 1))
             valid[i] = ~np.any(ang < area * np.pi / 180)
@@ -675,6 +674,40 @@ def assignVanishingType(lines, vp, tol, area=10):
     tp[I > tol] = numVP + 1
 
     return tp, typeCost
+
+
+def refitLineSegmentB(lines, vp, vpweight=0.1):
+    '''
+    Refit direction of line segments
+    INPUT:
+        lines: original line segments
+        vp: vannishing point
+        vpweight: if set to 0, lines will not change; if set to inf, lines will
+                  be forced to pass vp
+    '''
+    numSample = 100
+    numLine = len(lines)
+    xyz = np.zeros((numSample+1, 3))
+    wei = np.ones((numSample+1, 1))
+    wei[numSample] = vpweight * numSample
+    lines_ali = lines.copy()
+    for i in range(numLine):
+        n = lines[i, :3]
+        sid = lines[i, 4] * 2 * np.pi
+        eid = lines[i, 5] * 2 * np.pi
+        if eid < sid:
+            x = np.linspace(sid, eid + 2 * np.pi, numSample)
+            x = x % (2 * np.pi)
+        else:
+            x = np.linspace(sid, eid, numSample)
+        u = -np.pi + x.reshape(-1, 1)
+        v = computeUVN(n, u, lines[i, 3])
+        xyz[:numSample] = uv2xyzN(np.hstack([u, v]), lines[i, 3])
+        xyz[numSample] = vp
+        outputNM = curveFitting(xyz, wei)
+        lines_ali[i, :3] = outputNM
+
+    return lines_ali
 
 
 def panoEdgeDetection(img, viewSize=320, qError=0.7):
@@ -728,14 +761,13 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
         lines2 = lines[tp==1]
         lines3 = lines[tp==2]
         
-        # lines1rB = refitLineSegmentB(lines1, mainDirect(1,:), 0);
-        # lines2rB = refitLineSegmentB(lines2, mainDirect(2,:), 0);
-        # lines3rB = refitLineSegmentB(lines3, mainDirect(3,:), 0);
+        lines1rB = refitLineSegmentB(lines1, mainDirect[0], 0)
+        lines2rB = refitLineSegmentB(lines2, mainDirect[1], 0)
+        lines3rB = refitLineSegmentB(lines3, mainDirect[2], 0)
         
-    #     clines = [lines1rB;lines2rB;lines3rB];
-    # end
+        clines = np.vstack([lines1rB, lines2rB, lines3rB])
 
-    # imgres = zeros(size(img));
+    imgres = np.zeros_like(img)
     # panoEdge1r = paintParameterLine( lines1rB, 1024, 512, imgres);
     # panoEdge2r = paintParameterLine( lines2rB, 1024, 512, imgres);
     # panoEdge3r = paintParameterLine( lines3rB, 1024, 512, imgres);
