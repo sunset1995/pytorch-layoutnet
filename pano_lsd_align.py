@@ -710,6 +710,34 @@ def refitLineSegmentB(lines, vp, vpweight=0.1):
     return lines_ali
 
 
+def paintParameterLine(parameterLine, width, height):
+    lines = parameterLine.copy()
+    panoEdgeC = np.zeros((height, width))
+
+    num_sample = max(height, width)
+    for i in range(len(lines)):
+        n = lines[i, :3]
+        sid = lines[i, 4] * 2 * np.pi
+        eid = lines[i, 5] * 2 * np.pi
+        if eid < sid:
+            x = np.linspace(sid, eid + 2 * np.pi, num_sample)
+            x = x % (2 * np.pi)
+        else:
+            x = np.linspace(sid, eid, num_sample)
+        u = -np.pi + x.reshape(-1, 1)
+        v = computeUVN(n, u, lines[i, 3])
+        xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
+        uv = xyz2uvN(xyz, 1)
+        
+        m = np.minimum(np.floor((uv[:,0] + np.pi) / (2 * np.pi) * width) + 1,
+            width).astype(np.int32)
+        n = np.minimum(np.floor(((np.pi / 2) - uv[:, 1]) / np.pi * height) + 1,
+            height).astype(np.int32)
+        panoEdgeC[n-1, m-1] = i
+
+    return panoEdgeC
+
+
 def panoEdgeDetection(img, viewSize=320, qError=0.7):
     '''
     line detection on panorama
@@ -767,11 +795,10 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
         
         clines = np.vstack([lines1rB, lines2rB, lines3rB])
 
-    imgres = np.zeros_like(img)
-    # panoEdge1r = paintParameterLine( lines1rB, 1024, 512, imgres);
-    # panoEdge2r = paintParameterLine( lines2rB, 1024, 512, imgres);
-    # panoEdge3r = paintParameterLine( lines3rB, 1024, 512, imgres);
-    # panoEdger = cat(3, panoEdge1r, panoEdge2r, panoEdge3r);
+    panoEdge1r = paintParameterLine(lines1rB, 1024, 512)
+    panoEdge2r = paintParameterLine(lines2rB, 1024, 512)
+    panoEdge3r = paintParameterLine(lines3rB, 1024, 512)
+    panoEdger = np.stack([panoEdge1r, panoEdge2r, panoEdge3r], -1)
 
     # output
     olines = clines.copy()
@@ -807,15 +834,22 @@ if __name__ == '__main__':
     assert (i5_idx - 1 != i5_idx_).sum() == 0
 
     # Test separatePano
-    panoEdgeDetection(np.array(img_ori))
+    olines, vp, views, edges, panoEdge, score, angle = panoEdgeDetection(np.array(img_ori))
+    panoEdge = (panoEdge > 0).astype(np.float64)
+    for v in vp[2::-1]:
+        print(v)
+    myvp_edg = rotatePanorama(panoEdge.copy(), vp[2::-1])
+    myvp_img = rotatePanorama(np.array(img_ori.resize((2048, 1024), PIL.Image.BICUBIC)) / 255.0, vp[2::-1])
+    Image.fromarray((myvp_edg * 255).astype(np.uint8)).save('test/myvp_edg.png')
+    Image.fromarray((myvp_img * 255).astype(np.uint8)).save('test/myvp_img.png')
 
     # Test rotatePanorama
     img_rotatePanorama = np.array(Image.open('test/rotatePanorama_pano_arrsorvpjptpii.png'))
-    vp = np.array([
+    vpgt = np.array([
         [0.758831, -0.651121, 0.014671],
         [0.650932, 0.758969, 0.015869],
         [-0.018283, 0.001220, 0.999832]])
-    img_rotatePanorama_ = rotatePanorama(np.array(img_ori.resize((2048, 1024), PIL.Image.BICUBIC)) / 255.0, vp)
+    img_rotatePanorama_ = rotatePanorama(np.array(img_ori.resize((2048, 1024), PIL.Image.BICUBIC)) / 255.0, vpgt)
     img_rotatePanorama_ = (img_rotatePanorama_ * 255.0).round()
     img_rotatePanorama_diff = np.abs(img_rotatePanorama - img_rotatePanorama_.round())
     assert img_rotatePanorama_.shape == img_rotatePanorama.shape
