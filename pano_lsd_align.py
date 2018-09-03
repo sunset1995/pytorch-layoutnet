@@ -727,7 +727,7 @@ def paintParameterLine(parameterLine, width, height):
     return panoEdgeC
 
 
-def panoEdgeDetection(img, viewSize=320, qError=0.7):
+def panoEdgeDetection(img, viewSize=320, qError=0.7, refineIter=3):
     '''
     line detection on panorama
        INPUT:
@@ -751,13 +751,10 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
     y = np.concatenate([yh, yp, [np.pi/2., -np.pi/2]])
 
     sepScene = separatePano(img.copy(), fov, x, y, cutSize)
-    for i in range(len(sepScene)):
-        Image.fromarray(sepScene[i]['img']).save('test/edgeMap/%02d_scene_.png' % (i+1))
     edge = []
     LSD = cv2.createLineSegmentDetector(_refine=cv2.LSD_REFINE_ADV, _quant=qError)
     for i, scene in enumerate(sepScene):
         edgeMap, edgeList = lsdWrap(scene['img'], LSD)
-        Image.fromarray(edgeMap).save('test/edgeMap/%02d.out.png' % (i+1))
         edge.append({
             'img': edgeMap,
             'edgeLst': edgeList,
@@ -769,7 +766,7 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
     lines, olines = combineEdgesN(edge)
 
     clines = lines.copy()
-    for _ in range(3):
+    for _ in range(refineIter):
         mainDirect, score, angle = findMainDirectionEMA(clines)
 
         tp, typeCost = assignVanishingType(lines, mainDirect[:3], 0.1, 10)
@@ -783,17 +780,17 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
         
         clines = np.vstack([lines1rB, lines2rB, lines3rB])
 
-    panoEdge1r = paintParameterLine(lines1rB, 1024, 512)
-    panoEdge2r = paintParameterLine(lines2rB, 1024, 512)
-    panoEdge3r = paintParameterLine(lines3rB, 1024, 512)
+    panoEdge1r = paintParameterLine(lines1rB, img.shape[1], img.shape[0])
+    panoEdge2r = paintParameterLine(lines2rB, img.shape[1], img.shape[0])
+    panoEdge3r = paintParameterLine(lines3rB, img.shape[1], img.shape[0])
     panoEdger = np.stack([panoEdge1r, panoEdge2r, panoEdge3r], -1)
 
     # output
-    olines = clines.copy()
-    vp = mainDirect.copy()
-    views = sepScene.copy()
-    edges = edge.copy()
-    panoEdge = panoEdger.copy()
+    olines = clines
+    vp = mainDirect
+    views = sepScene
+    edges = edge
+    panoEdge = panoEdger
 
     return olines, vp, views, edges, panoEdge, score, angle
 
@@ -803,73 +800,42 @@ if __name__ == '__main__':
     # disable OpenCV3's non thread safe OpenCL option
     cv2.ocl.setUseOpenCL(False)
 
+    import os
+    import argparse
     import PIL
     from PIL import Image
-    from scipy.io import loadmat
-    import glob
-    img_ori = Image.open('test/pano_arrsorvpjptpii.jpg')
+    import time
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--i', required=True)
+    parser.add_argument('--o_dir', required=True)
+    parser.add_argument('--qError', default=0.7, type=float)
+    parser.add_argument('--refineIter', default=3, type=int)
+    args = parser.parse_args()
 
-    # Test icosahedron2sphere
-    i3 = loadmat('test/i3.mat')['i3']
-    i3_idx = loadmat('test/i3_idx.mat')['i3_idx']
-    i5 = loadmat('test/i5.mat')['i5']
-    i5_idx = loadmat('test/i5_idx.mat')['i5_idx']
-    i3_, i3_idx_ = icosahedron2sphere(3)
-    i5_, i5_idx_ = icosahedron2sphere(5)
-    assert i3.shape == i3_.shape
-    assert i3_idx.shape == i3_idx_.shape
-    assert i5.shape == i5_.shape
-    assert i5_idx.shape == i5_idx_.shape
-    assert (i3 != i3_).sum() == 0
-    assert (i5 != i5_).sum() == 0
-    assert (i3_idx - 1 != i3_idx_).sum() == 0
-    assert (i5_idx - 1 != i5_idx_).sum() == 0
+    # Read image
+    img_ori = np.array(Image.open(args.i))
 
-    # Test lsd
-    LSD = cv2.createLineSegmentDetector(_refine=cv2.LSD_REFINE_ADV, _quant=0.7)
-    mIOU = []
-    for path in glob.glob('test/edgeMap/*scene.png'):
-        i_scene = np.array(Image.open(path))
-        edgeMap, edgeList = lsdWrap(cv2.cvtColor(i_scene, cv2.COLOR_RGB2GRAY), LSD)
-        e_scene = np.array(Image.open(path.replace('_scene', '')))
-        Image.fromarray(edgeMap).save(path.replace('_scene', '_'))
-
-        edgeMap = (edgeMap > 0.5)
-        e_scene = (e_scene > 0.5)
-        IOU = (edgeMap & e_scene).sum() / (edgeMap | e_scene).sum()
-        mIOU.append(IOU)
-    print('IOU mean:', np.mean(mIOU))
-    print('IOU  max:', np.max(mIOU))
-
-    # Test separatePano
-    olines, vp, views, edges, panoEdge, score, angle = panoEdgeDetection(np.array(img_ori))
+    # Vanishing point estimation & Line segments detection
+    s_time = time.time()
+    olines, vp, views, edges, panoEdge, score, angle = panoEdgeDetection(img_ori,
+                                                                         qError=args.qError,
+                                                                         refineIter=args.refineIter)
+    print('Elapsed time: %.2f' % (time.time() - s_time))
     panoEdge = (panoEdge > 0)
+
+    print('Vanishing point:')
     for v in vp[2::-1]:
         print('%.6f %.6f %.6f' % tuple(v))
-    myvp_edg = rotatePanorama(panoEdge.astype(np.float64), vp[2::-1])
-    myvp_img = rotatePanorama(np.array(img_ori.resize((1024, 512), PIL.Image.BICUBIC)) / 255.0, vp[2::-1])
-    myvp_all = myvp_img.copy()
-    myvp_all[(myvp_edg > 0.5).sum(-1) > 0] = 0
-    myvp_all[myvp_edg[..., 0] > 0.5, 0] = 1
-    myvp_all[myvp_edg[..., 1] > 0.5, 1] = 1
-    myvp_all[myvp_edg[..., 2] > 0.5, 2] = 1
-    Image.fromarray((myvp_edg * 255).astype(np.uint8)).save('test/myvp_edg.png')
-    Image.fromarray((myvp_img * 255).astype(np.uint8)).save('test/myvp_img.png')
-    Image.fromarray((myvp_all * 255).astype(np.uint8)).save('test/myvp_all.png')
 
-    # Test rotatePanorama
-    img_rotatePanorama = np.array(Image.open('test/rotatePanorama_pano_arrsorvpjptpii.png'))
-    vpgt = np.array([
-        [0.758831, -0.651121, 0.014671],
-        [0.650932, 0.758969, 0.015869],
-        [-0.018283, 0.001220, 0.999832]])
-    img_rotatePanorama_ = rotatePanorama(np.array(img_ori.resize((2048, 1024), PIL.Image.BICUBIC)) / 255.0, vpgt)
-    img_rotatePanorama_ = (img_rotatePanorama_ * 255.0).round()
-    img_rotatePanorama_diff = np.abs(img_rotatePanorama - img_rotatePanorama_.round())
-    assert img_rotatePanorama_.shape == img_rotatePanorama.shape
-    print('rotatePanorama: L1  diff', img_rotatePanorama_diff.mean())
-    print('rotatePanorama: max diff', img_rotatePanorama_diff.max())
-    Image.fromarray(img_rotatePanorama_.round().astype(np.uint8)) \
-         .save('test/rotatePanorama_pano_arrsorvpjptpii.out.png')
-    Image.fromarray(img_rotatePanorama_diff.astype(np.uint8)) \
-         .save('test/rotatePanorama_pano_arrsorvpjptpii.diff.png')
+    # Visualization
+    edg = rotatePanorama(panoEdge.astype(np.float64), vp[2::-1])
+    img = rotatePanorama(img_ori / 255.0, vp[2::-1])
+    one = img.copy()
+    one[(edg > 0.5).sum(-1) > 0] = 0
+    one[edg[..., 0] > 0.5, 0] = 1
+    one[edg[..., 1] > 0.5, 1] = 1
+    one[edg[..., 2] > 0.5, 2] = 1
+    Image.fromarray((edg * 255).astype(np.uint8)).save(os.path.join(args.o_dir, 'edg.png'))
+    Image.fromarray((img * 255).astype(np.uint8)).save(os.path.join(args.o_dir, 'img.png'))
+    Image.fromarray((one * 255).astype(np.uint8)).save(os.path.join(args.o_dir, 'one.png'))
