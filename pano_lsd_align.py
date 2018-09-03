@@ -52,8 +52,8 @@ def rotatePanorama(img, vp=None, R=None):
     TX, TY = np.meshgrid(range(1, sphereW + 1), range(1, sphereH + 1))
     TX = TX.reshape(-1, 1, order='F')
     TY = TY.reshape(-1, 1, order='F')
-    ANGx = (TX - sphereW/2 - 0.5)/sphereW * np.pi * 2
-    ANGy = -(TY - sphereH/2 - 0.5)/sphereH * np.pi
+    ANGx = (TX - sphereW/2 - 0.5) / sphereW * np.pi * 2
+    ANGy = -(TY - sphereH/2 - 0.5) / sphereH * np.pi
     uvNew = np.hstack([ANGx, ANGy])
     xyzNew = uv2xyzN(uvNew, 1)
 
@@ -421,7 +421,7 @@ def curveFitting(inputXYZ, weight):
     @weight  : N x 1
     '''
     l = np.linalg.norm(inputXYZ, axis=1, keepdims=True)
-    inputXYZ =inputXYZ / l
+    inputXYZ = inputXYZ / l
     weightXYZ = inputXYZ * weight
     XX = np.sum(weightXYZ[:, 0] ** 2)
     YY = np.sum(weightXYZ[:, 1] ** 2)
@@ -456,7 +456,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
     for i in range(numLinesg):
         tempNorm = segNormal[[i]]
         tempDots = (voteBinPoints * tempNorm).sum(1)
-        
+
         valid = np.abs(tempDots) < np.cos((90 - binRadius) * np.pi / 180)
 
         voteBinValues[valid] = voteBinValues[valid] + segScores[i] * segLength[i]
@@ -471,7 +471,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
         checkID1 = checkIDs1[j]
         vote1 = voteBinValues[checkID1]
         if voteBinValues[checkID1] == 0 and force_unempty:
-            continue        
+            continue
         checkNormal = voteBinPoints[[checkID1]]
         dotProduct = (voteBinPoints * checkNormal).sum(1)
         checkIDs2 = np.nonzero(np.abs(dotProduct) < np.cos((90 - orthTolerance) * np.pi / 180))[0]
@@ -484,7 +484,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
             cpv = np.cross(voteBinPoints[checkID1], voteBinPoints[checkID2]).reshape(1, 3)
             cpn = np.linalg.norm(cpv)
             dotProduct = (voteBinPoints * cpv).sum(1) / cpn
-            checkIDs3 = np.nonzero(np.abs(dotProduct) > np.cos(orthTolerance * np.pi / 180))[0]    
+            checkIDs3 = np.nonzero(np.abs(dotProduct) > np.cos(orthTolerance * np.pi / 180))[0]
 
             for k in range(len(checkIDs3)):
                 checkID3 = checkIDs3[k]
@@ -499,11 +499,11 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
                         lastStepAngle = np.arccos(tmp.clip(-1, 1))
                     else:
                         lastStepAngle = np.zeros(3)
-                                         
+
                     checkID1Max = checkID1
                     checkID2Max = checkID2
-                    checkID3Max = checkID3               
-                                               
+                    checkID3Max = checkID3
+
                     voteMax = vote3
 
     if checkID1Max == 0:
@@ -576,31 +576,31 @@ def findMainDirectionEMA(lines):
         valid2 = dot2 < np.cos((90 - tol[it]) * np.pi / 180)
         valid3 = dot3 < np.cos((90 - tol[it]) * np.pi / 180)
         valid = valid1 | valid2 | valid3
-        
+
         if np.sum(valid) == 0:
             print('[WARN] findMainDirectionEMA: zero line segments for voting', file=sys.stderr)
             break
-        
+
         subSegNormal = segNormal[valid]
         subSegLength = segLength[valid]
         subSegScores = segScores[valid]
-        
+
         dot1 = np.abs((candiSet * curXYZ[[0]]).sum(1))
         dot2 = np.abs((candiSet * curXYZ[[1]]).sum(1))
         dot3 = np.abs((candiSet * curXYZ[[2]]).sum(1))
         valid1 = dot1 > np.cos(tol[it] * np.pi / 180)
         valid2 = dot2 > np.cos(tol[it] * np.pi / 180)
         valid3 = dot3 > np.cos(tol[it] * np.pi / 180)
-        valid = valid1 | valid2 | valid3;
-        
+        valid = valid1 | valid2 | valid3
+
         if np.sum(valid) == 0:
             print('[WARN] findMainDirectionEMA: zero line segments for voting', file=sys.stderr)
             break
-           
+
         subCandiSet = candiSet[valid]
-        
+
         tcurXYZ, _, _ = sphereHoughVote(subSegNormal, subSegLength, subSegScores, 2*binRadiusD, 2, subCandiSet)
-        
+
         if tcurXYZ is None:
             print('[WARN] findMainDirectionEMA: no answer found', file=sys.stderr)
             break
@@ -632,7 +632,7 @@ def assignVanishingType(lines, vp, tol, area=10):
     numLine = len(lines)
     numVP = len(vp)
     typeCost = np.zeros((numLine, numVP))
-    # perpendicular 
+    # perpendicular
     for vid in range(numVP):
         cosint = (lines[:, :3] * vp[[vid]]).sum(1)
         typeCost[:, vid] = np.arcsin(np.abs(cosint).clip(-1, 1))
@@ -714,7 +714,6 @@ def paintParameterLine(parameterLine, width, height):
         v = computeUVN(n, u, lines[i, 3])
         xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
         uv = xyz2uvN(xyz, 1)
-        
         m = np.minimum(np.floor((uv[:,0] + np.pi) / (2 * np.pi) * width) + 1,
             width).astype(np.int32)
         n = np.minimum(np.floor(((np.pi / 2) - uv[:, 1]) / np.pi * height) + 1,
@@ -770,11 +769,11 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7, refineIter=3):
         lines1 = lines[tp==0]
         lines2 = lines[tp==1]
         lines3 = lines[tp==2]
-        
+
         lines1rB = refitLineSegmentB(lines1, mainDirect[0], 0)
         lines2rB = refitLineSegmentB(lines2, mainDirect[1], 0)
         lines3rB = refitLineSegmentB(lines3, mainDirect[2], 0)
-        
+
         clines = np.vstack([lines1rB, lines2rB, lines3rB])
 
     panoEdge1r = paintParameterLine(lines1rB, img.shape[1], img.shape[0])
@@ -802,7 +801,7 @@ if __name__ == '__main__':
     import PIL
     from PIL import Image
     import time
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--i', required=True)
     parser.add_argument('--o_dir', required=True)
