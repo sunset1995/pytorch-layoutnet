@@ -815,6 +815,7 @@ if __name__ == '__main__':
     import PIL
     from PIL import Image
     from scipy.io import loadmat
+    import glob
     img_ori = Image.open('test/pano_arrsorvpjptpii.jpg')
 
     # Test icosahedron2sphere
@@ -832,6 +833,22 @@ if __name__ == '__main__':
     assert (i5 != i5_).sum() == 0
     assert (i3_idx - 1 != i3_idx_).sum() == 0
     assert (i5_idx - 1 != i5_idx_).sum() == 0
+
+    # Test lsd
+    LSD = cv2.createLineSegmentDetector(_refine=cv2.LSD_REFINE_ADV, _quant=0.7)
+    mIOU = []
+    for path in glob.glob('test/edgeMap/*scene.png'):
+        i_scene = np.array(Image.open(path))
+        edgeMap, edgeList = lsdWrap(cv2.cvtColor(i_scene, cv2.COLOR_RGB2GRAY), LSD)
+        e_scene = np.array(Image.open(path.replace('_scene', '')))
+        Image.fromarray(edgeMap).save(path.replace('_scene', '_'))
+
+        edgeMap = (edgeMap > 0.5)
+        e_scene = (e_scene > 0.5)
+        IOU = (edgeMap & e_scene).sum() / (edgeMap | e_scene).sum()
+        mIOU.append(IOU)
+    print('IOU mean:', np.mean(mIOU))
+    print('IOU max:', np.max(mIOU))
 
     # Test separatePano
     olines, vp, views, edges, panoEdge, score, angle = panoEdgeDetection(np.array(img_ori))
