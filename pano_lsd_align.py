@@ -213,23 +213,23 @@ def edgeFromImg2Pano(edge):
     Xc = (0 + imW-1) / 2
     Yc = (0 + imH-1) / 2
 
-    vecx1 = (edgeList[:, 0] - Xc).reshape(-1, 1)
-    vecy1 = (edgeList[:, 1] - Yc).reshape(-1, 1)
-    vecx2 = (edgeList[:, 2] - Xc).reshape(-1, 1)
-    vecy2 = (edgeList[:, 3] - Yc).reshape(-1, 1)
+    vecx1 = edgeList[:, [0]] - Xc
+    vecy1 = edgeList[:, [1]] - Yc
+    vecx2 = edgeList[:, [2]] - Xc
+    vecy2 = edgeList[:, [3]] - Yc
 
     vec1 = np.tile(vecx1, [1, 3]) * np.tile(vecposX, [len(vecx1), 1]) \
          + np.tile(vecy1, [1, 3]) * np.tile(vecposY, [len(vecy1), 1])
     vec2 = np.tile(vecx2, [1, 3]) * np.tile(vecposX, [len(vecx2), 1]) \
          + np.tile(vecy2, [1, 3]) * np.tile(vecposY, [len(vecy2), 1])
-    coord1 = np.tile([x0, y0, z0], [len(vec1), 1]) + vec1
-    coord2 = np.tile([x0, y0, z0], [len(vec2), 1]) + vec2
+    coord1 = np.tile([[x0, y0, z0]], [len(vec1), 1]) + vec1
+    coord2 = np.tile([[x0, y0, z0]], [len(vec2), 1]) + vec2
 
     normal = np.cross(coord1, coord2, axis=1)
     n = np.sqrt(normal[:, 0] ** 2 + normal[:, 1] ** 2 + normal[:, 2] ** 2)
-    normal = normal / n.reshape(-1, 1)
+    normal = normal / np.linalg.norm(normal, axis=1, keepdims=True)
 
-    panoList = np.concatenate([normal, coord1, coord2, edgeList[:, -1].reshape(-1, 1)], 1)
+    panoList = np.hstack([normal, coord1, coord2, edgeList[:, [-1]]])
 
     return panoList
 
@@ -282,7 +282,7 @@ def combineEdgesN(edges):
         if len(panoLst) == 0:
             continue
         arcList.append(panoLst)
-    arcList = np.concatenate(arcList, 0)
+    arcList = np.vstack(arcList)
 
     # ori lines
     numLine = len(arcList)
@@ -848,7 +848,7 @@ if __name__ == '__main__':
         IOU = (edgeMap & e_scene).sum() / (edgeMap | e_scene).sum()
         mIOU.append(IOU)
     print('IOU mean:', np.mean(mIOU))
-    print('IOU max:', np.max(mIOU))
+    print('IOU  max:', np.max(mIOU))
 
     # Test separatePano
     olines, vp, views, edges, panoEdge, score, angle = panoEdgeDetection(np.array(img_ori))
