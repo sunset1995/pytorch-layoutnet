@@ -290,7 +290,7 @@ def combineEdgesN(edges):
     areaXY = np.abs(np.sum(arcList[:, :3] * np.tile([[0, 0, 1]], [numLine, 1]), 1))
     areaYZ = np.abs(np.sum(arcList[:, :3] * np.tile([[1, 0, 0]], [numLine, 1]), 1))
     areaZX = np.abs(np.sum(arcList[:, :3] * np.tile([[0, 1, 0]], [numLine, 1]), 1))
-    planeIDs = np.argmax(np.stack([areaXY, areaYZ, areaZX], -1), 1)  # XY YZ ZX
+    planeIDs = np.argmax(np.stack([areaXY, areaYZ, areaZX], -1), 1) + 1  # XY YZ ZX
 
     for i in range(numLine):
         ori_lines[i, :3] = arcList[i, :3]
@@ -812,6 +812,9 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
 
 if __name__ == '__main__':
 
+    # disable OpenCV3's non thread safe OpenCL option
+    cv2.ocl.setUseOpenCL(False)
+
     import PIL
     from PIL import Image
     from scipy.io import loadmat
@@ -852,13 +855,19 @@ if __name__ == '__main__':
 
     # Test separatePano
     olines, vp, views, edges, panoEdge, score, angle = panoEdgeDetection(np.array(img_ori))
-    panoEdge = (panoEdge > 0).astype(np.float64)
+    panoEdge = (panoEdge > 0)
     for v in vp[2::-1]:
-        print(v)
-    myvp_edg = rotatePanorama(panoEdge.copy(), vp[2::-1])
-    myvp_img = rotatePanorama(np.array(img_ori.resize((2048, 1024), PIL.Image.BICUBIC)) / 255.0, vp[2::-1])
+        print('%.6f %.6f %.6f' % tuple(v))
+    myvp_edg = rotatePanorama(panoEdge.astype(np.float64), vp[2::-1])
+    myvp_img = rotatePanorama(np.array(img_ori.resize((1024, 512), PIL.Image.BICUBIC)) / 255.0, vp[2::-1])
+    myvp_all = myvp_img.copy()
+    myvp_all[(myvp_edg > 0.5).sum(-1) > 0] = 0
+    myvp_all[myvp_edg[..., 0] > 0.5, 0] = 1
+    myvp_all[myvp_edg[..., 1] > 0.5, 1] = 1
+    myvp_all[myvp_edg[..., 2] > 0.5, 2] = 1
     Image.fromarray((myvp_edg * 255).astype(np.uint8)).save('test/myvp_edg.png')
     Image.fromarray((myvp_img * 255).astype(np.uint8)).save('test/myvp_img.png')
+    Image.fromarray((myvp_all * 255).astype(np.uint8)).save('test/myvp_all.png')
 
     # Test rotatePanorama
     img_rotatePanorama = np.array(Image.open('test/rotatePanorama_pano_arrsorvpjptpii.png'))
