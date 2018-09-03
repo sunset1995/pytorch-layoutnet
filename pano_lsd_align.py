@@ -9,6 +9,7 @@ Code is not optimized for python or numpy yet.
 author: Cheng Sun
 email : s2821d3721@gmail.com
 '''
+import sys
 import numpy as np
 from scipy.ndimage import map_coordinates
 from pano import coords2uv, uv2xyzN, xyz2uvN, computeUVN
@@ -356,7 +357,6 @@ def combineEdgesN(edges):
                 valid_line[j] = False
 
         lines = lines[valid_line]
-        print('iter: %d, before: %d, after: %d' % (_, len(valid_line), sum(valid_line)))
 
     return lines, ori_lines
 
@@ -510,7 +510,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
                     voteMax = vote3
 
     if checkID1Max == 0:
-        print('Warning: No orthogonal voting exist!!!')
+        print('[WARN] sphereHoughVote: no orthogonal voting exist', file=sys.stderr)
         return None, 0, 0
     initXYZ = voteBinPoints[[checkID1Max, checkID2Max, checkID3Max]]
 
@@ -542,7 +542,6 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
 
 def findMainDirectionEMA(lines):
     '''compute vp from set of lines'''
-    print('Computing vanishing point')
 
     # initial guess
     segNormal = lines[:, :3]
@@ -561,13 +560,8 @@ def findMainDirectionEMA(lines):
     initXYZ, score, angle = sphereHoughVote(segNormal, segLength, segScores, 2*binRadius, 2, candiSet)
 
     if initXYZ is None:
-        print('Initial Failed')
+        print('[WARN] findMainDirectionEMA: initial failed', file=sys.stderr)
         return None, score, angle
-
-    print('Initial Computation: %d candidates, %d line segments' % (len(candiSet), numLinesg))
-    print('direction 1: %.6f %.6f %.6f' % tuple(initXYZ[0]))
-    print('direction 2: %.6f %.6f %.6f' % tuple(initXYZ[1]))
-    print('direction 3: %.6f %.6f %.6f' % tuple(initXYZ[2]))
 
     # iterative refine
     iter_max = 3
@@ -587,7 +581,7 @@ def findMainDirectionEMA(lines):
         valid = valid1 | valid2 | valid3
         
         if np.sum(valid) == 0:
-            print('ZERO line segment for voting')
+            print('[WARN] findMainDirectionEMA: zero line segments for voting', file=sys.stderr)
             break
         
         subSegNormal = segNormal[valid]
@@ -603,7 +597,7 @@ def findMainDirectionEMA(lines):
         valid = valid1 | valid2 | valid3;
         
         if np.sum(valid) == 0:
-            print('ZERO line segment for voting')
+            print('[WARN] findMainDirectionEMA: zero line segments for voting', file=sys.stderr)
             break
            
         subCandiSet = candiSet[valid]
@@ -611,16 +605,11 @@ def findMainDirectionEMA(lines):
         tcurXYZ, _, _ = sphereHoughVote(subSegNormal, subSegLength, subSegScores, 2*binRadiusD, 2, subCandiSet)
         
         if tcurXYZ is None:
-            print('NO answer found!')
+            print('[WARN] findMainDirectionEMA: no answer found', file=sys.stderr)
             break
         curXYZ = tcurXYZ.copy()
 
-        print('%d-th iteration: %d candidates, %d line segments' % (it, len(subCandiSet), len(subSegScores)))
-    print('direction 1: %.6f %.6f %.6f' % tuple(curXYZ[0]))
-    print('direction 2: %.6f %.6f %.6f' % tuple(curXYZ[1]))
-    print('direction 3: %.6f %.6f %.6f' % tuple(curXYZ[2]))
     mainDirect = curXYZ.copy()
-
     mainDirect[0] = mainDirect[0] * np.sign(mainDirect[0,2])
     mainDirect[1] = mainDirect[1] * np.sign(mainDirect[1,2])
     mainDirect[2] = mainDirect[2] * np.sign(mainDirect[2,2])
@@ -781,7 +770,6 @@ def panoEdgeDetection(img, viewSize=320, qError=0.7):
 
     clines = lines.copy()
     for _ in range(3):
-        print(('%d-th iteration' % _).center(50, '*'))
         mainDirect, score, angle = findMainDirectionEMA(clines)
 
         tp, typeCost = assignVanishingType(lines, mainDirect[:3], 0.1, 10)
