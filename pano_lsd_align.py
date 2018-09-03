@@ -211,6 +211,8 @@ def edgeFromImg2Pano(edge):
     vecposX = np.array([np.cos(vx), -np.sin(vx), 0])
     vecposY = np.cross(np.array([x0, y0, z0]), vecposX)
     vecposY = vecposY / np.sqrt(vecposY @ vecposY.T)
+    vecposX = vecposX.reshape(1, -1)
+    vecposY = vecposY.reshape(1, -1)
     Xc = (0 + imW-1) / 2
     Yc = (0 + imH-1) / 2
 
@@ -219,15 +221,12 @@ def edgeFromImg2Pano(edge):
     vecx2 = edgeList[:, [2]] - Xc
     vecy2 = edgeList[:, [3]] - Yc
 
-    vec1 = np.tile(vecx1, [1, 3]) * np.tile(vecposX, [len(vecx1), 1]) \
-         + np.tile(vecy1, [1, 3]) * np.tile(vecposY, [len(vecy1), 1])
-    vec2 = np.tile(vecx2, [1, 3]) * np.tile(vecposX, [len(vecx2), 1]) \
-         + np.tile(vecy2, [1, 3]) * np.tile(vecposY, [len(vecy2), 1])
-    coord1 = np.tile([[x0, y0, z0]], [len(vec1), 1]) + vec1
-    coord2 = np.tile([[x0, y0, z0]], [len(vec2), 1]) + vec2
+    vec1 = np.tile(vecx1, [1, 3]) * vecposX + np.tile(vecy1, [1, 3]) * vecposY
+    vec2 = np.tile(vecx2, [1, 3]) * vecposX + np.tile(vecy2, [1, 3]) * vecposY
+    coord1 = [[x0, y0, z0]] + vec1
+    coord2 = [[x0, y0, z0]] + vec2
 
     normal = np.cross(coord1, coord2, axis=1)
-    n = np.sqrt(normal[:, 0] ** 2 + normal[:, 1] ** 2 + normal[:, 2] ** 2)
     normal = normal / np.linalg.norm(normal, axis=1, keepdims=True)
 
     panoList = np.hstack([normal, coord1, coord2, edgeList[:, [-1]]])
@@ -288,9 +287,9 @@ def combineEdgesN(edges):
     # ori lines
     numLine = len(arcList)
     ori_lines = np.zeros((numLine, 8))
-    areaXY = np.abs(np.sum(arcList[:, :3] * np.tile([[0, 0, 1]], [numLine, 1]), 1))
-    areaYZ = np.abs(np.sum(arcList[:, :3] * np.tile([[1, 0, 0]], [numLine, 1]), 1))
-    areaZX = np.abs(np.sum(arcList[:, :3] * np.tile([[0, 1, 0]], [numLine, 1]), 1))
+    areaXY = np.abs(arcList[:, 2])
+    areaYZ = np.abs(arcList[:, 0])
+    areaZX = np.abs(arcList[:, 1])
     planeIDs = np.argmax(np.stack([areaXY, areaYZ, areaZX], -1), 1) + 1  # XY YZ ZX
 
     for i in range(numLine):
@@ -318,7 +317,7 @@ def combineEdgesN(edges):
         for i in range(numLine):
             if not valid_line[i]:
                 continue
-            dotProd = (lines[:, :3] * np.tile(lines[i:i+1, :3], [numLine, 1])).sum(1)
+            dotProd = (lines[:, :3] * lines[[i], :3]).sum(1)
             valid_curr = np.logical_and((np.abs(dotProd) > np.cos(np.pi / 180)), valid_line)
             valid_curr[i] = False
             for j in np.nonzero(valid_curr)[0]:
@@ -352,8 +351,7 @@ def combineEdgesN(edges):
                 l = np.arccos(np.dot(xyz[0, :], xyz[1, :]).clip(-1, 1))
                 scr = (lines[i,6]*lines[i,7] + lines[j,6]*lines[j,7]) / (lines[i,6]+lines[j,6])
 
-                newLine = np.array([*nc, lines[i, 3], nrmin, nrmax, l, scr])
-                lines[i, :] = newLine
+                lines[i] = [*nc, lines[i, 3], nrmin, nrmax, l, scr]
                 valid_line[j] = False
 
         lines = lines[valid_line]
@@ -391,7 +389,7 @@ def icosahedron2sphere(level):
     tri = idx.reshape(3, 20, order='F').T
 
     # extrude
-    coor = list(coor / np.tile(np.sqrt(np.sum(coor * coor, 1, keepdims=True)), (1, 3)))
+    coor = list(coor / np.tile(np.linalg.norm(coor, axis=1, keepdims=True), (1, 3)))
 
     for _ in range(level):
         triN = []
@@ -422,9 +420,9 @@ def curveFitting(inputXYZ, weight):
     @inputXYZ: N x 3
     @weight  : N x 1
     '''
-    l = np.sqrt(np.sum(inputXYZ ** 2, 1, keepdims=True))
-    inputXYZ = inputXYZ / np.tile(l, [1, 3])
-    weightXYZ = inputXYZ * np.tile(weight, [1, 3])
+    l = np.linalg.norm(inputXYZ, axis=1, keepdims=True)
+    inputXYZ =inputXYZ / l
+    weightXYZ = inputXYZ * weight
     XX = np.sum(weightXYZ[:, 0] ** 2)
     YY = np.sum(weightXYZ[:, 1] ** 2)
     ZZ = np.sum(weightXYZ[:, 2] ** 2)
@@ -437,8 +435,7 @@ def curveFitting(inputXYZ, weight):
         [XY, YY, YZ],
         [ZX, YZ, ZZ]])
     U, S, Vh = np.linalg.svd(A)
-    V = Vh.T
-    outputNM = V[:, -1].T
+    outputNM = Vh[-1, :]
     outputNM = outputNM / np.linalg.norm(outputNM)
 
     return outputNM
@@ -458,7 +455,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
     voteBinValues = np.zeros(numVoteBin)
     for i in range(numLinesg):
         tempNorm = segNormal[[i]]
-        tempDots = (voteBinPoints * np.tile(tempNorm, [numVoteBin, 1])).sum(1)
+        tempDots = (voteBinPoints * tempNorm).sum(1)
         
         valid = np.abs(tempDots) < np.cos((90 - binRadius) * np.pi / 180)
 
@@ -476,7 +473,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
         if voteBinValues[checkID1] == 0 and force_unempty:
             continue        
         checkNormal = voteBinPoints[[checkID1]]
-        dotProduct = (voteBinPoints * np.tile(checkNormal, [len(voteBinPoints), 1])).sum(1)
+        dotProduct = (voteBinPoints * checkNormal).sum(1)
         checkIDs2 = np.nonzero(np.abs(dotProduct) < np.cos((90 - orthTolerance) * np.pi / 180))[0]
 
         for i in range(len(checkIDs2)):
@@ -485,8 +482,8 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
                 continue
             vote2 = vote1 + voteBinValues[checkID2]
             cpv = np.cross(voteBinPoints[checkID1], voteBinPoints[checkID2]).reshape(1, 3)
-            cpn = np.sqrt(np.sum(cpv ** 2))
-            dotProduct = (voteBinPoints * np.tile(cpv, [len(voteBinPoints), 1])).sum(1) / cpn
+            cpn = np.linalg.norm(cpv)
+            dotProduct = (voteBinPoints * cpv).sum(1) / cpn
             checkIDs3 = np.nonzero(np.abs(dotProduct) > np.cos(orthTolerance * np.pi / 180))[0]    
 
             for k in range(len(checkIDs3)):
@@ -516,7 +513,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
 
     # refine
     refiXYZ = np.zeros((3, 3))
-    dotprod = (segNormal * np.tile(initXYZ[[0]], [len(segNormal), 1])).sum(1)
+    dotprod = (segNormal * initXYZ[[0]]).sum(1)
     valid = np.abs(dotprod) < np.cos((90 - binRadius) * np.pi / 180)
     validNm = segNormal[valid]
     validWt = segLength[valid] * segScores[valid]
@@ -524,7 +521,7 @@ def sphereHoughVote(segNormal, segLength, segScores, binRadius, orthTolerance, c
     refiNM = curveFitting(validNm, validWt)
     refiXYZ[0] = refiNM.copy()
 
-    dotprod = (segNormal * np.tile(initXYZ[[1]], [len(segNormal), 1])).sum(1)
+    dotprod = (segNormal * initXYZ[[1]]).sum(1)
     valid = np.abs(dotprod) < np.cos((90 - binRadius) * np.pi / 180)
     validNm = segNormal[valid]
     validWt = segLength[valid] * segScores[valid]
@@ -572,9 +569,9 @@ def findMainDirectionEMA(lines):
     curXYZ = initXYZ.copy()
     tol = np.linspace(4*binRadius, 4*binRadiusD, iter_max)  # shrink down ls and candi
     for it in range(iter_max):
-        dot1 = np.abs((segNormal * np.tile(curXYZ[[0]], [numLinesg, 1])).sum(1))
-        dot2 = np.abs((segNormal * np.tile(curXYZ[[1]], [numLinesg, 1])).sum(1))
-        dot3 = np.abs((segNormal * np.tile(curXYZ[[2]], [numLinesg, 1])).sum(1))
+        dot1 = np.abs((segNormal * curXYZ[[0]]).sum(1))
+        dot2 = np.abs((segNormal * curXYZ[[1]]).sum(1))
+        dot3 = np.abs((segNormal * curXYZ[[2]]).sum(1))
         valid1 = dot1 < np.cos((90 - tol[it]) * np.pi / 180)
         valid2 = dot2 < np.cos((90 - tol[it]) * np.pi / 180)
         valid3 = dot3 < np.cos((90 - tol[it]) * np.pi / 180)
@@ -588,9 +585,9 @@ def findMainDirectionEMA(lines):
         subSegLength = segLength[valid]
         subSegScores = segScores[valid]
         
-        dot1 = np.abs((candiSet * np.tile(curXYZ[[0]], [numCandi, 1])).sum(1))
-        dot2 = np.abs((candiSet * np.tile(curXYZ[[1]], [numCandi, 1])).sum(1))
-        dot3 = np.abs((candiSet * np.tile(curXYZ[[2]], [numCandi, 1])).sum(1))
+        dot1 = np.abs((candiSet * curXYZ[[0]]).sum(1))
+        dot2 = np.abs((candiSet * curXYZ[[1]]).sum(1))
+        dot3 = np.abs((candiSet * curXYZ[[2]]).sum(1))
         valid1 = dot1 > np.cos(tol[it] * np.pi / 180)
         valid2 = dot2 > np.cos(tol[it] * np.pi / 180)
         valid3 = dot3 > np.cos(tol[it] * np.pi / 180)
@@ -637,7 +634,7 @@ def assignVanishingType(lines, vp, tol, area=10):
     typeCost = np.zeros((numLine, numVP))
     # perpendicular 
     for vid in range(numVP):
-        cosint = (lines[:, :3] * np.tile(vp[[vid]], [numLine, 1])).sum(1)
+        cosint = (lines[:, :3] * vp[[vid]]).sum(1)
         typeCost[:, vid] = np.arcsin(np.abs(cosint).clip(-1, 1))
 
     # infinity
@@ -653,8 +650,8 @@ def assignVanishingType(lines, vp, tol, area=10):
             y = np.linspace(xyz[0, 1], xyz[1, 1], 100).reshape(-1, 1)
             z = np.linspace(xyz[0, 2], xyz[1, 2], 100).reshape(-1, 1)
             xyz = np.hstack([x, y, z])
-            xyz = xyz / np.tile(np.sqrt(np.sum(xyz ** 2, 1, keepdims=True)), [1, 3])
-            ang = np.arccos(np.abs((xyz * np.tile(vp[[vid]], [100, 1])).sum(1)).clip(-1, 1))
+            xyz = xyz / np.tile(np.linalg.norm(xyz, axis=1, keepdims=True), [1, 3])
+            ang = np.arccos(np.abs((xyz * vp[[vid]]).sum(1)).clip(-1, 1))
             valid[i] = ~np.any(ang < area * np.pi / 180)
         typeCost[~valid, vid] = 100
 
