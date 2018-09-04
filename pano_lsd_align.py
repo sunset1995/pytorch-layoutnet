@@ -807,7 +807,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--i', required=True)
-    parser.add_argument('--o_dir', required=True)
+    parser.add_argument('--o_prefix', required=True)
     parser.add_argument('--qError', default=0.7, type=float)
     parser.add_argument('--refineIter', default=3, type=int)
     args = parser.parse_args()
@@ -830,11 +830,11 @@ if __name__ == '__main__':
     # Visualization
     edg = rotatePanorama(panoEdge.astype(np.float64), vp[2::-1])
     img = rotatePanorama(img_ori / 255.0, vp[2::-1])
-    one = img.copy()
+    one = img.copy() * 0.5
     one[(edg > 0.5).sum(-1) > 0] = 0
     one[edg[..., 0] > 0.5, 0] = 1
     one[edg[..., 1] > 0.5, 1] = 1
     one[edg[..., 2] > 0.5, 2] = 1
-    Image.fromarray((edg * 255).astype(np.uint8)).save(os.path.join(args.o_dir, 'edg.png'))
-    Image.fromarray((img * 255).astype(np.uint8)).save(os.path.join(args.o_dir, 'img.png'))
-    Image.fromarray((one * 255).astype(np.uint8)).save(os.path.join(args.o_dir, 'one.png'))
+    Image.fromarray((edg * 255).astype(np.uint8)).save('%s_edg.png' % args.o_prefix)
+    Image.fromarray((img * 255).astype(np.uint8)).save('%s_img.png' % args.o_prefix)
+    Image.fromarray((one * 255).astype(np.uint8)).save('%s_one.png' % args.o_prefix)
