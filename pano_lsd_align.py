@@ -645,16 +645,15 @@ def assignVanishingType(lines, vp, tol, area=10):
         typeCost[:, vid] = np.arcsin(np.abs(cosint).clip(-1, 1))
 
     # infinity
+    u = np.stack([lines[:, 4], lines[:, 5]], -1)
+    u = u.reshape(-1, 1) * 2 * np.pi - np.pi
+    v = computeUVN_vec(lines[:, :3], u, lines[:, 3])
+    xyz = uv2xyzN_vec(np.hstack([u, v]), np.repeat(lines[:, 3], 2))
+    xyz = multi_linspace(xyz[0::2].reshape(-1), xyz[1::2].reshape(-1), 100)
+    xyz = np.vstack([blk.T for blk in np.split(xyz, numLine)])
+    xyz = xyz / np.linalg.norm(xyz, axis=1, keepdims=True)
     for vid in range(numVP):
-        u = np.stack([lines[:, 4], lines[:, 5]], -1)
-        u = u.reshape(-1, 1) * 2 * np.pi - np.pi
-        v = computeUVN_vec(lines[:, :3], u, lines[:, 3])
-        xyz = uv2xyzN_vec(np.hstack([u, v]), np.repeat(lines[:, 3], 2))
-        xyz = multi_linspace(xyz[0::2].reshape(-1), xyz[1::2].reshape(-1), 100)
-        xyz = np.vstack([blk.T for blk in np.split(xyz, numLine)])
-        xyz = xyz / np.linalg.norm(xyz, axis=1, keepdims=True)
         ang = np.arccos(np.abs((xyz * vp[[vid]]).sum(1)).clip(-1, 1))
-
         notok = (ang < area * np.pi / 180).reshape(numLine, 100).sum(1) != 0
         typeCost[notok, vid] = 100
 
@@ -685,8 +684,7 @@ def refitLineSegmentB(lines, vp, vpweight=0.1):
         sid = lines[i, 4] * 2 * np.pi
         eid = lines[i, 5] * 2 * np.pi
         if eid < sid:
-            x = np.linspace(sid, eid + 2 * np.pi, numSample)
-            x = x % (2 * np.pi)
+            x = np.linspace(sid, eid + 2 * np.pi, numSample) % (2 * np.pi)
         else:
             x = np.linspace(sid, eid, numSample)
         u = -np.pi + x.reshape(-1, 1)
