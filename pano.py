@@ -112,7 +112,7 @@ def computeUVN_vec(n, in_, planeID):
     '''
     vectorization version of computeUVN
     @n         N x 3
-    @in_      2N x 1
+    @in_      MN x 1
     @planeID   N
     '''
     n = n.copy()
@@ -120,7 +120,7 @@ def computeUVN_vec(n, in_, planeID):
         n[planeID == 2] = np.roll(n[planeID == 2], 2, axis=1)
     if (planeID == 3).sum():
         n[planeID == 3] = np.roll(n[planeID == 3], 1, axis=1)
-    n = np.repeat(n, 2, axis=0)
+    n = np.repeat(n, in_.shape[0] // n.shape[0], axis=0)
     assert n.shape[0] == in_.shape[0]
     bc = n[:, [0]] * np.sin(in_) + n[:, [1]] * np.cos(in_)
     bs = n[:, [2]]
