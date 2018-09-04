@@ -186,6 +186,8 @@ def lsdWrap(img, LSD=None, **kwargs):
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     lines, width, prec, nfa = LSD.detect(img)
+    if lines is None:
+        return np.zeros_like(img), np.array([])
     edgeMap = LSD.drawSegments(np.zeros_like(img), lines)[..., -1]
     lines = np.squeeze(lines, 1)
     edgeList = np.concatenate([lines, width, prec, nfa], 1)
