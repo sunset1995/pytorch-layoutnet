@@ -12,7 +12,7 @@ email : s2821d3721@gmail.com
 import sys
 import numpy as np
 from scipy.ndimage import map_coordinates
-from pano import coords2uv, uv2xyzN, xyz2uvN, computeUVN
+from pano import coords2uv, uv2xyzN, xyz2uvN, computeUVN, computeUVN_vec, uv2xyzN_vec
 import cv2
 
 
@@ -628,6 +628,13 @@ def findMainDirectionEMA(lines):
     return mainDirect, score, angle
 
 
+def multi_linspace(start, stop, num):
+    div = (num - 1)
+    y = np.arange(0, num, dtype=np.float64)
+    steps = (stop - start) / div
+    return steps.reshape(-1, 1) * y + start.reshape(-1, 1)
+
+
 def assignVanishingType(lines, vp, tol, area=10):
     numLine = len(lines)
     numVP = len(vp)
@@ -639,21 +646,17 @@ def assignVanishingType(lines, vp, tol, area=10):
 
     # infinity
     for vid in range(numVP):
-        valid = np.ones(numLine, bool)
-        for i in range(numLine):
-            us = lines[i, 4]
-            ue = lines[i, 5]
-            u = np.array([[us], [ue]]) * 2 * np.pi - np.pi
-            v = computeUVN(lines[i, :3], u, lines[i, 3])
-            xyz = uv2xyzN(np.hstack([u, v]), lines[i, 3])
-            x = np.linspace(xyz[0, 0], xyz[1, 0], 100).reshape(-1, 1)
-            y = np.linspace(xyz[0, 1], xyz[1, 1], 100).reshape(-1, 1)
-            z = np.linspace(xyz[0, 2], xyz[1, 2], 100).reshape(-1, 1)
-            xyz = np.hstack([x, y, z])
-            xyz = xyz / np.tile(np.linalg.norm(xyz, axis=1, keepdims=True), [1, 3])
-            ang = np.arccos(np.abs((xyz * vp[[vid]]).sum(1)).clip(-1, 1))
-            valid[i] = ~np.any(ang < area * np.pi / 180)
-        typeCost[~valid, vid] = 100
+        u = np.stack([lines[:, 4], lines[:, 5]], -1)
+        u = u.reshape(-1, 1) * 2 * np.pi - np.pi
+        v = computeUVN_vec(lines[:, :3], u, lines[:, 3])
+        xyz = uv2xyzN_vec(np.hstack([u, v]), np.repeat(lines[:, 3], 2))
+        xyz = multi_linspace(xyz[0::2].reshape(-1), xyz[1::2].reshape(-1), 100)
+        xyz = np.vstack([blk.T for blk in np.split(xyz, numLine)])
+        xyz = xyz / np.linalg.norm(xyz, axis=1, keepdims=True)
+        ang = np.arccos(np.abs((xyz * vp[[vid]]).sum(1)).clip(-1, 1))
+
+        notok = (ang < area * np.pi / 180).reshape(numLine, 100).sum(1) != 0
+        typeCost[notok, vid] = 100
 
     I = typeCost.min(1)
     tp = typeCost.argmin(1)

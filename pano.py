@@ -57,6 +57,25 @@ def uv2xyzN(uv, planeID=1):
     return xyz
 
 
+def uv2xyzN_vec(uv, planeID):
+    '''
+    vectorization version of uv2xyzN
+    @uv       N x 2
+    @planeID  N
+    '''
+    assert (planeID.astype(int) != planeID).sum() == 0
+    planeID = planeID.astype(int)
+    ID1 = (planeID - 1 + 0) % 3
+    ID2 = (planeID - 1 + 1) % 3
+    ID3 = (planeID - 1 + 2) % 3
+    ID = np.arange(len(uv))
+    xyz = np.zeros((len(uv), 3))
+    xyz[ID, ID1] = np.cos(uv[:, 1]) * np.sin(uv[:, 0])
+    xyz[ID, ID2] = np.cos(uv[:, 1]) * np.cos(uv[:, 0])
+    xyz[ID, ID3] = np.sin(uv[:, 1])
+    return xyz
+
+
 def xyz2uvN(xyz, planeID=1):
     ID1 = (int(planeID) - 1 + 0) % 3
     ID2 = (int(planeID) - 1 + 1) % 3
@@ -85,6 +104,26 @@ def computeUVN(n, in_, planeID):
         n = np.array([n[2], n[0], n[1]])
     bc = n[0] * np.sin(in_) + n[1] * np.cos(in_)
     bs = n[2]
+    out = np.arctan(-bc / (bs + 1e-9))
+    return out
+
+
+def computeUVN_vec(n, in_, planeID):
+    '''
+    vectorization version of computeUVN
+    @n         N x 3
+    @in_      2N x 1
+    @planeID   N
+    '''
+    n = n.copy()
+    if (planeID == 2).sum():
+        n[planeID == 2] = np.roll(n[planeID == 2], 2, axis=1)
+    if (planeID == 3).sum():
+        n[planeID == 3] = np.roll(n[planeID == 3], 1, axis=1)
+    n = np.repeat(n, 2, axis=0)
+    assert n.shape[0] == in_.shape[0]
+    bc = n[:, [0]] * np.sin(in_) + n[:, [1]] * np.cos(in_)
+    bs = n[:, [2]]
     out = np.arctan(-bc / (bs + 1e-9))
     return out
 
