@@ -1,13 +1,12 @@
 # pytorch-layoutnet
 This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/1803.08999)  "LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image". [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
-Currently only joint bounday branch and corner branch are implemented but they are enough to yield similar qualitative and quantitative (corner error) result as official.  
+What difference from official:
+- **Architecture**: Only joint *bounday branch* and *corner branch* are implemented as the paper states that "Training with 3D regressor has a small impact".
+- **Pre-processing**: implementation of *line segment detector* and *pano image alignment* are converted from matlab to python. See [README_PANO (WIP)]() if you want to import the functionality as a python package.
+- **Post-processing**: no 3D layout optimization. Alternatively, this repo smooths the probability map before peak finding and find it help improve testing evaluation metric.
 
 Sampled visualization from testing data:
 <img src="https://raw.githubusercontent.com/sunset1995/pytorch-layoutnet/master/assert/demo.png" width="1024">
-
-\[WIP\] components:
-- line segment detector (LSD)
-- panoramic image alignment
 
 ## Requirements
 - Python 3
@@ -15,6 +14,7 @@ Sampled visualization from testing data:
 - numpy
 - scipy
 - Pillow
+- opencv-python>=3.1 (for pre-processing)
 - torchfile (for converting official data and pretrained weight)
 
 ## Preparation
@@ -40,6 +40,8 @@ Sampled visualization from testing data:
     ```
 
 ## Visualization
+If you have aligned pano image and corresponding extracted line segments, use `visual.py`, otherwise use `visual_from_scratch.py`.
+
 See `python visual.py -h` for detailed arguments explaination. Basically, `--path_prefix` give the prefix path to 3 `state_dict` to load, `--img_glob` and `--line_glob` tell the input channels of rgb and line segment (remember to add quotes if you use wildcards like `*` in your glob path). Finally `--output_dir` specify the directory to dump the results.  
 Execute below command to get the same output as demos.  
 ```python visual.py --flip --rotate 0.25 0.5 0.75 --img_glob "data/test/img/pano_aaccxxpwmsdgvj.png" --line_glob "data/test/line/pano_aaccxxpwmsdgvj.png" --output_dir assert/```
@@ -49,6 +51,8 @@ Execute below command to get the same output as demos.
   ![demo corner](assert/pano_aaccxxpwmsdgvj_cor.png)
 - output boundary, suffix with `_bon.png` (Note that below result isn't processed by 3D layout optimization)
   ![demo boundary](assert/pano_aaccxxpwmsdgvj_bon.png)
+  
+If you have rgb pano image only, `visual_from_scratch.py` wraps pre-processing steps (line segments detector + alignment) such that you just have `--line_glob` specifying input rgb images.
 
 ## Training
 See `python train.py -h` for detailed arguments explanation.  
