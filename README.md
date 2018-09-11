@@ -2,7 +2,7 @@
 This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/1803.08999)  "LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image". [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
 What difference from official:
 - **Architecture**: Only joint *bounday branch* and *corner branch* are implemented as the paper states that "Training with 3D regressor has a small impact".
-- **Pre-processing**: implementation of *line segment detector* and *pano image alignment* are converted from matlab to python. See [README_PANO (WIP)]() if you want to import the functionality as a python package.
+- **Pre-processing**: implementation of *line segment detector* and *pano image alignment* are converted from matlab to python in `pano.py` and `pano_lsd_align.py`.
 - **Post-processing**: no 3D layout optimization. Alternatively, this repo smooths the probability map before peak finding and find it help improve testing evaluation metric.
 
 Sampled visualization from testing data:
