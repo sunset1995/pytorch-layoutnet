@@ -124,8 +124,10 @@ for i_path, l_path in zip(img_paths, line_paths):
         edg_img = edg_img.transpose([0, 2, 3, 1]).mean(0)
         cor_img = cor_img.transpose([0, 2, 3, 1]).mean(0)
 
+    cormap = cor_img[..., 0].copy()
+
     # Generate boundary image
-    bon_img = draw_boundary(cor_img[..., 0], i_img * 255)
+    bon_img = draw_boundary(cormap.copy(), i_img * 255)
 
     # Composite output image with rgb image
     edg_img = args.alpha * edg_img + (1 - args.alpha) * i_img
@@ -133,7 +135,7 @@ for i_path, l_path in zip(img_paths, line_paths):
 
     # All in one image
     all_in_one = 0.3 * edg_img + 0.3 * cor_img + 0.4 * i_img
-    all_in_one = draw_boundary(cor_img[..., 0], all_in_one * 255)
+    all_in_one = draw_boundary(cormap.copy(), all_in_one * 255)
 
     # Dump result
     basename = os.path.splitext(os.path.basename(i_path))[0]
