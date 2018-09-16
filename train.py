@@ -9,7 +9,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
-from utils import group_weight, adjust_learning_rate, StatisticDict
+from utils import group_weight, adjust_learning_rate, StatisticDict, pmap_x
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -34,6 +34,8 @@ parser.add_argument('--no_gamma', action='store_true',
                     help='disable gamma augmentation')
 parser.add_argument('--noise', action='store_true',
                     help='enable noise augmentation')
+parser.add_argument('--contrast', action='store_true',
+                    help='enable contrast augmentation')
 parser.add_argument('--num_workers', default=6, type=int,
                     help='numbers of workers for dataloaders')
 # optimization related arguments
@@ -57,6 +59,8 @@ parser.add_argument('--beta1', default=0.9, type=float,
                     help='momentum for sgd, beta1 for adam')
 parser.add_argument('--weight_decay', default=0, type=float,
                     help='factor for L2 regularization')
+parser.add_argument('--cormap_smooth', default=0, type=float,
+                    help='cor probability smooth constraint')
 # Misc arguments
 parser.add_argument('--no_cuda', action='store_true',
                     help='disable cuda')
@@ -77,11 +81,13 @@ os.makedirs(os.path.join(args.ckpt, args.id), exist_ok=True)
 dataset_train = PanoDataset(root_dir=args.root_dir_train,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=not args.no_flip, rotate=not args.no_rotate,
-                            gamma=not args.no_gamma, noise=args.noise)
+                            gamma=not args.no_gamma, noise=args.noise,
+                            contrast=args.contrast)
 dataset_valid = PanoDataset(root_dir=args.root_dir_valid,
                             cat_list=[*args.input_cat, 'edge', 'cor'],
                             flip=False, rotate=False,
-                            gamma=False)
+                            gamma=False, noise=False,
+                            contrast=False)
 loader_train = DataLoader(dataset_train, args.batch_size_train,
                           shuffle=True, drop_last=True,
                           num_workers=args.num_workers,
@@ -153,6 +159,20 @@ for ith_epoch in range(1, args.epochs + 1):
         loss_cor[y_cor == 0.] *= 0.2
         loss_cor = loss_cor.mean()
         loss = loss_edg + loss_cor
+
+        if args.cormap_smooth > 0:
+            cormap = torch.sigmoid(y_cor_)
+            LR = pmap_x(y_cor[..., :-1], y_cor[..., 1:])
+            LR_ = pmap_x(cormap[..., :-1], cormap[..., 1:])
+            UB = pmap_x(y_cor[..., :-1, :], y_cor[..., 1:, :])
+            UB_ = pmap_x(cormap[..., :-1, :], cormap[..., 1:, :])
+
+            LR_loss = (LR - LR_).abs().mean() * args.cormap_smooth
+            UB_loss = (UB - UB_).abs().mean() * args.cormap_smooth
+            loss += LR_loss + UB_loss
+
+            train_losses.update('lr loss', LR_loss.item())
+            train_losses.update('ub loss', UB_loss.item())
 
         # backprop
         optimizer.zero_grad()

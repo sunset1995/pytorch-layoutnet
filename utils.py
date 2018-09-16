@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -90,3 +91,9 @@ class StatisticDict():
     def __str__(self):
         return ' | '.join([
             '%s %.6f' % (k, self._map[k]) for k in self._order])
+
+
+def pmap_x(pmap1, pmap2):
+    pmap_max = torch.max(pmap1 + 1e-9, pmap2 + 1.1e-9)
+    pmap_min = torch.min(pmap1 + 1e-9, pmap2 + 1.1e-9)
+    return pmap_min / pmap_max
