@@ -813,7 +813,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Read image
-    img_ori = np.array(Image.open(args.i))
+    img_ori = np.array(Image.open(args.i).resize((1024, 512)))
 
     # Vanishing point estimation & Line segments detection
     s_time = time.time()

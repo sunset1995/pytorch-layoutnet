@@ -26,12 +26,15 @@ parser.add_argument('--q_error', default=0.7, type=float)
 parser.add_argument('--refine_iter', default=3, type=int)
 # Data augmented arguments (to improve output quality)
 parser.add_argument('--flip', action='store_true',
-                    help='whether to perfome left-right flip. '
+                    help='whether to perform left-right flip. '
                          '# of input x2.')
 parser.add_argument('--rotate', nargs='*', default=[], type=float,
-                    help='whether to perfome horizontal rotate. '
+                    help='whether to perform horizontal rotate. '
                          'each elements indicate fraction of image width. '
                          '# of input xlen(rotate).')
+# Post processing related
+parser.add_argument('--post_optimize', action='store_true',
+                    help='whether to perform 3D layout post optimization')
 # Visualization related arguments
 parser.add_argument('--alpha', default=0.8, type=float,
                     help='weight to composite output with origin rgb image.')
@@ -89,7 +92,7 @@ for i_path in sorted(glob.glob(args.img_glob)):
     print('Processing', i_path, flush=True)
 
     # Load and cat input images
-    img_ori = np.array(Image.open(i_path).resize((1024, 512), Image.BICUBIC))
+    img_ori = np.array(Image.open(i_path).resize((1024, 512), Image.BICUBIC))[..., :3]
     _, vp, _, _, panoEdge, _, _ = panoEdgeDetection(img_ori,
                                                     qError=args.q_error,
                                                     refineIter=args.refine_iter)
@@ -124,9 +127,10 @@ for i_path in sorted(glob.glob(args.img_glob)):
         cor_img = cor_img.transpose([0, 2, 3, 1]).mean(0)
 
     cormap = cor_img[..., 0].copy()
+    edgmap = edg_img.copy()
 
     # Generate boundary image
-    bon_img = draw_boundary(cormap.copy(), i_img * 255)
+    bon_img = draw_boundary(cormap.copy(), i_img * 255, args.post_optimize, edgmap)
 
     # Composite output image with rgb image
     edg_img = args.alpha * edg_img + (1 - args.alpha) * i_img
@@ -134,7 +138,7 @@ for i_path in sorted(glob.glob(args.img_glob)):
 
     # All in one image
     all_in_one = 0.3 * edg_img + 0.3 * cor_img + 0.4 * i_img
-    all_in_one = draw_boundary(cormap.copy(), all_in_one * 255)
+    all_in_one = draw_boundary(cormap.copy(), all_in_one * 255, args.post_optimize, edgmap)
 
     # Dump result
     basename = os.path.splitext(os.path.basename(i_path))[0]

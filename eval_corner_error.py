@@ -1,7 +1,7 @@
 import os
 import argparse
 import numpy as np
-from itertools import chain
+from scipy.ndimage import convolve
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,7 @@ from model import Encoder, Decoder
 from dataset import PanoDataset
 from utils import StatisticDict
 from pano import get_ini_cor
+from pano_opt import optimize_cor_id
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -90,7 +91,9 @@ def augment_undo(x_imgs_augmented, aug_type):
 
 test_losses = StatisticDict()
 for ith, datas in enumerate(dataset):
-    print('processed %d batches out of %d' % (ith, len(dataset)), end='\r', flush=True)
+    # if datas[-1].startswith('pano'):
+    #     continue
+    # print('processed %d batches out of %d' % (ith, len(dataset)), end='\r', flush=True)
 
     x = torch.cat([datas[i] for i in range(len(args.input_cat))], dim=0).numpy()
     x_augmented, aug_type = augment(x)
@@ -100,12 +103,15 @@ for ith, datas in enumerate(dataset):
         en_list = encoder(x_augmented)
         edg_de_list = edg_decoder(en_list[::-1])
         cor_de_list = cor_decoder(en_list[-1:] + edg_de_list[:-1])
+        edg_tensor = torch.sigmoid(edg_de_list[-1])
         cor_tensor = torch.sigmoid(cor_de_list[-1])
 
         # Recover the effect from augmentation
+        edg_img = augment_undo(edg_tensor.cpu().numpy(), aug_type)
         cor_img = augment_undo(cor_tensor.cpu().numpy(), aug_type)
 
         # Merge all results from augmentation
+        edg_img = edg_img.transpose([0, 2, 3, 1]).mean(0)
         cor_img = cor_img.transpose([0, 2, 3, 1]).mean(0)[..., 0]
 
     # Load ground truth corner label
@@ -121,5 +127,14 @@ for ith, datas in enumerate(dataset):
     cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5
     cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
     test_losses.update('Corner error', cor_error.mean())
+
+    # Optimize corner index
+    edgmap = edg_img.copy()#convolve(edg_img, np.ones((21, 21, 1)), mode='wrap')
+    cormap = cor_img.copy()#convolve(cor_img, np.ones((21, 21)), mode='wrap')
+    opt_cor_id = optimize_cor_id(cor_id, edgmap, cormap)
+    opt_cor_error = ((gt - opt_cor_id) ** 2).sum(1) ** 0.5
+    opt_cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
+    test_losses.update('Corner error (opt)', opt_cor_error.mean())
+    print('%.6f %.6f -> %.6f' % (opt_cor_error.mean() - cor_error.mean(), cor_error.mean(), opt_cor_error.mean()))
 
 print('[RESULT] %s' % (test_losses), flush=True)
