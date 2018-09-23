@@ -89,6 +89,8 @@ def augment_undo(x_imgs_augmented, aug_type):
 
 
 test_losses = StatisticDict()
+test_pano_losses = StatisticDict()
+test_2d3d_losses = StatisticDict()
 for ith, datas in enumerate(dataset):
     print('processed %d batches out of %d' % (ith, len(dataset)), end='\r', flush=True)
 
@@ -120,6 +122,21 @@ for ith, datas in enumerate(dataset):
     # Compute normalized corner error
     cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5
     cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
+    x_error = np.abs(gt[:, 0] - cor_id[:, 0]).mean()
+    y_error = np.abs(gt[:, 1] - cor_id[:, 1]).mean()
     test_losses.update('Corner error', cor_error.mean())
+    test_losses.update('X error', x_error.mean())
+    test_losses.update('Y error', y_error.mean())
 
-print('[RESULT] %s' % (test_losses), flush=True)
+    if k.startswith('pano'):
+        test_pano_losses.update('Corner error', cor_error.mean())
+        test_pano_losses.update('X error', x_error.mean())
+        test_pano_losses.update('Y error', y_error.mean())
+    else:
+        test_2d3d_losses.update('Corner error', cor_error.mean())
+        test_2d3d_losses.update('X error', x_error.mean())
+        test_2d3d_losses.update('Y error', y_error.mean())
+
+print('[RESULT overall     ] %s' % (test_losses), flush=True)
+print('[RESULT panocontext ] %s' % (test_pano_losses), flush=True)
+print('[RESULT stanford2d3d] %s' % (test_2d3d_losses), flush=True)
