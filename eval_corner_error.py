@@ -90,6 +90,11 @@ def augment_undo(x_imgs_augmented, aug_type):
 
 
 test_losses = StatisticDict()
+test_pano_losses = StatisticDict()
+test_2d3d_losses = StatisticDict()
+test_losses_opt = StatisticDict()
+test_pano_losses_opt = StatisticDict()
+test_2d3d_losses_opt = StatisticDict()
 for ith, datas in enumerate(dataset):
     # if datas[-1].startswith('pano'):
     #     continue
@@ -126,15 +131,50 @@ for ith, datas in enumerate(dataset):
     # Compute normalized corner error
     cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5
     cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
+    x_error = np.abs(gt[:, 0] - cor_id[:, 0]).mean()
+    y_error = np.abs(gt[:, 1] - cor_id[:, 1]).mean()
     test_losses.update('Corner error', cor_error.mean())
+    test_losses.update('X error', x_error.mean())
+    test_losses.update('Y error', y_error.mean())
+
+    if k.startswith('pano'):
+        test_pano_losses.update('Corner error', cor_error.mean())
+        test_pano_losses.update('X error', x_error.mean())
+        test_pano_losses.update('Y error', y_error.mean())
+    else:
+        test_2d3d_losses.update('Corner error', cor_error.mean())
+        test_2d3d_losses.update('X error', x_error.mean())
+        test_2d3d_losses.update('Y error', y_error.mean())
 
     # Optimize corner index
-    edgmap = edg_img.copy()#convolve(edg_img, np.ones((21, 21, 1)), mode='wrap')
-    cormap = cor_img.copy()#convolve(cor_img, np.ones((21, 21)), mode='wrap')
+    edgker = np.ones((21, 21, 1))
+    corker = np.ones((21, 21))
+    edgker /= edgker.sum()
+    corker /= corker.sum()
+    edgmap = convolve(edg_img, edgker, mode='wrap')
+    cormap = convolve(cor_img, corker, mode='wrap')
     opt_cor_id = optimize_cor_id(cor_id, edgmap, cormap)
     opt_cor_error = ((gt - opt_cor_id) ** 2).sum(1) ** 0.5
     opt_cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
-    test_losses.update('Corner error (opt)', opt_cor_error.mean())
     print('%.6f %.6f -> %.6f' % (opt_cor_error.mean() - cor_error.mean(), cor_error.mean(), opt_cor_error.mean()))
+    opt_x_error = np.abs(gt[:, 0] - opt_cor_id[:, 0]).mean()
+    opt_y_error = np.abs(gt[:, 1] - opt_cor_id[:, 1]).mean()
+    test_losses_opt.update('Corner error', opt_cor_error.mean())
+    test_losses_opt.update('X error', opt_x_error.mean())
+    test_losses_opt.update('Y error', opt_y_error.mean())
 
-print('[RESULT] %s' % (test_losses), flush=True)
+    if k.startswith('pano'):
+        test_pano_losses_opt.update('Corner error', opt_cor_error.mean())
+        test_pano_losses_opt.update('X error', opt_x_error.mean())
+        test_pano_losses_opt.update('Y error', opt_y_error.mean())
+    else:
+        test_2d3d_losses_opt.update('Corner error', opt_cor_error.mean())
+        test_2d3d_losses_opt.update('X error', opt_x_error.mean())
+        test_2d3d_losses_opt.update('Y error', opt_y_error.mean())
+
+print('[RESULT overall         ] %s' % (test_losses), flush=True)
+print('[RESULT overall      opt] %s' % (test_losses_opt), flush=True)
+print('[RESULT panocontext     ] %s' % (test_pano_losses), flush=True)
+print('[RESULT panocontext  opt] %s' % (test_pano_losses_opt), flush=True)
+print('[RESULT stanford2d3d    ] %s' % (test_2d3d_losses), flush=True)
+print('[RESULT stanford2d3d opt] %s' % (test_2d3d_losses_opt), flush=True)
