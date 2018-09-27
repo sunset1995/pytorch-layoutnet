@@ -48,31 +48,21 @@ def wallidx(xy, w, h, z1, z2):
     return pts_linspace(pa, pb)
 
 
-def map_coordinates(input, coordinates, mode='nearest'):
+def map_coordinates(input, coordinates):
     ''' PyTorch version of scipy.ndimage.interpolation.map_coordinates
     input: (B, C, H, W)
     coordinates: (2, ...)
     mode: sampling method, options = {'nearest', 'bilinear'}
     '''
-    if not torch.is_tensor(coordinates):
-        coordinates = torch.FloatTensor(coordinates).to(input.device)
-    elif coordinates.dtype != torch.float32:
-        coordinates = coordinates.float()
-
-    if mode == 'nearest':
-        coordinates = torch.round(coordinates).long()
-        return input[..., coordinates[0], coordinates[1]]
-
-    elif mode == 'bilinear':
-        co_floor = torch.floor(coordinates).long()
-        co_ceil = torch.ceil(coordinates).long()
-        f00 = input[..., co_floor[0].clamp(0, input.size(-2) - 1), co_floor[1].clamp(0, input.size(-1) - 1)]
-        f10 = input[..., co_floor[0].clamp(0, input.size(-2) - 1), co_ceil[1].clamp(0, input.size(-1) - 1)]
-        f01 = input[..., co_ceil[0].clamp(0, input.size(-2) - 1), co_floor[1].clamp(0, input.size(-1) - 1)]
-        f11 = input[..., co_ceil[0].clamp(0, input.size(-2) - 1), co_ceil[1].clamp(0, input.size(-1) - 1)]
-        fx1 = f00 + (coordinates[1] - co_floor[1].float()) * (f10 - f00)
-        fx2 = f01 + (coordinates[1] - co_floor[1].float()) * (f11 - f01)
-        return fx1 + (coordinates[0] - co_floor[0].float()) * (fx2 - fx1)
+    co_floor = torch.floor(coordinates).long()
+    co_ceil = torch.ceil(coordinates).long()
+    f00 = input[..., co_floor[0].clamp(0, input.size(-2) - 1), co_floor[1].clamp(0, input.size(-1) - 1)]
+    f10 = input[..., co_floor[0].clamp(0, input.size(-2) - 1), co_ceil[1].clamp(0, input.size(-1) - 1)]
+    f01 = input[..., co_ceil[0].clamp(0, input.size(-2) - 1), co_floor[1].clamp(0, input.size(-1) - 1)]
+    f11 = input[..., co_ceil[0].clamp(0, input.size(-2) - 1), co_ceil[1].clamp(0, input.size(-1) - 1)]
+    fx1 = f00 + (coordinates[1] - co_floor[1].float()) * (f10 - f00)
+    fx2 = f01 + (coordinates[1] - co_floor[1].float()) * (f11 - f01)
+    return fx1 + (coordinates[0] - co_floor[0].float()) * (fx2 - fx1)
 
 
 def pc2cor_id(pc, pc_vec, pc_theta, pc_height):
@@ -90,74 +80,63 @@ def pc2cor_id(pc, pc_vec, pc_theta, pc_height):
 
 
 def project2sphere_score(pc, pc_vec, pc_theta, pc_height, scoreedg, scorecor, i_step=None):
+
+    # Sample corner loss
+    corid = pc2cor_id(pc, pc_vec, pc_theta, pc_height)
+    corid_coordinates = torch.stack([corid[:, 1], corid[:, 0]])
+    loss_cor = -map_coordinates(scorecor, corid_coordinates).mean()
+
+    # Sample boundary loss
     p1 = pc + pc_vec
     p2 = pc + rotatevec(pc_vec, pc_theta)
     p3 = pc - pc_vec
     p4 = pc + rotatevec(pc_vec, pc_theta - np.pi)
 
-    p12 = pts_linspace(p1, p2)
-    p23 = pts_linspace(p2, p3)
-    p34 = pts_linspace(p3, p4)
-    p41 = pts_linspace(p4, p1)
+    segs = [
+        pts_linspace(p1, p2),
+        pts_linspace(p2, p3),
+        pts_linspace(p3, p4),
+        pts_linspace(p4, p1),
+    ]
 
-    corid = pc2cor_id(pc, pc_vec, pc_theta, pc_height)
-    corid_coordinates = torch.stack([corid[1], corid[0]])
+    # wall-wall
+    loss_wallwall = 0
+    walls_idx = [
+        wallidx(p1, 1024, 512, -1, pc_height),
+        wallidx(p2, 1024, 512, -1, pc_height),
+        wallidx(p3, 1024, 512, -1, pc_height),
+        wallidx(p4, 1024, 512, -1, pc_height),
+    ]
+    for wall_idx in walls_idx:
+        wall_coordinates = torch.stack([wall_idx[:, 1], wall_idx[:, 0]])
+        loss_wallwall -= map_coordinates(scoreedg[..., 0], wall_coordinates).mean() / len(walls_idx)
 
-    wall_idx1 = wallidx(p1, 1024, 512, -1, pc_height)
-    wall_idx2 = wallidx(p2, 1024, 512, -1, pc_height)
-    wall_idx3 = wallidx(p3, 1024, 512, -1, pc_height)
-    wall_idx4 = wallidx(p4, 1024, 512, -1, pc_height)
-    wall_idx = torch.cat([
-        wall_idx1, wall_idx2, wall_idx3, wall_idx4
-    ], dim=0)
-    wall_coordinates = torch.stack([wall_idx[:, 1], wall_idx[:, 0]])
+    # ceil-wall
+    loss_ceilwall = 0
+    for seg in segs:
+        ceil_uv = xyz2uv(seg, z=-1)
+        ceil_idx = uv2idx(ceil_uv, 1024, 512)
+        ceil_coordinates = torch.stack([ceil_idx[:, 1], ceil_idx[:, 0]])
+        loss_ceilwall -= map_coordinates(scoreedg[..., 1], ceil_coordinates).mean() / len(segs)
 
-    ceil_uv12 = xyz2uv(p12, z=-1)
-    ceil_uv23 = xyz2uv(p23, z=-1)
-    ceil_uv34 = xyz2uv(p34, z=-1)
-    ceil_uv41 = xyz2uv(p41, z=-1)
-    ceil_idx12 = uv2idx(ceil_uv12, 1024, 512)
-    ceil_idx23 = uv2idx(ceil_uv23, 1024, 512)
-    ceil_idx34 = uv2idx(ceil_uv34, 1024, 512)
-    ceil_idx41 = uv2idx(ceil_uv41, 1024, 512)
-    ceil_idx = torch.cat([
-        ceil_idx12, ceil_idx23, ceil_idx34, ceil_idx41
-    ], dim=0)
-    ceil_coordinates = torch.stack([ceil_idx[:, 1], ceil_idx[:, 0]])
+    # floor-wall
+    loss_floorwall = 0
+    for seg in segs:
+        floor_uv = xyz2uv(seg, z=pc_height)
+        floor_idx = uv2idx(floor_uv, 1024, 512)
+        floor_coordinates = torch.stack([floor_idx[:, 1], floor_idx[:, 0]])
+        loss_floorwall -= map_coordinates(scoreedg[..., 2], floor_coordinates).mean() / len(segs)
 
-    floor_uv12 = xyz2uv(p12, z=pc_height)
-    floor_uv23 = xyz2uv(p23, z=pc_height)
-    floor_uv34 = xyz2uv(p34, z=pc_height)
-    floor_uv41 = xyz2uv(p41, z=pc_height)
-    floor_idx12 = uv2idx(floor_uv12, 1024, 512)
-    floor_idx23 = uv2idx(floor_uv23, 1024, 512)
-    floor_idx34 = uv2idx(floor_uv34, 1024, 512)
-    floor_idx41 = uv2idx(floor_uv41, 1024, 512)
-    floor_idx = torch.cat([
-        floor_idx12, floor_idx23, floor_idx34, floor_idx41
-    ], dim=0)
-    floor_coordinates = torch.stack([floor_idx[:, 1], floor_idx[:, 0]])
-
-    cor_scores = map_coordinates(scorecor, corid_coordinates, mode='bilinear')
-    wall_scores = map_coordinates(scoreedg[..., 0], wall_coordinates, mode='bilinear')
-    ceil_scores = map_coordinates(scoreedg[..., 1], ceil_coordinates, mode='bilinear')
-    floor_scores = map_coordinates(scoreedg[..., 2], floor_coordinates, mode='bilinear')
-
-    score = -(
-        cor_scores.mean() * 0 +\
-        wall_scores.mean() * 1 +\
-        ceil_scores.mean() * 1 +\
-        floor_scores.mean() * 1
-    )
+    losses = 0 * loss_cor + 1 * loss_wallwall + 1 * loss_ceilwall + 1 * loss_floorwall
 
     if i_step is not None:
         with torch.no_grad():
             print('step %d: %.3f (cor %.3f, wall %.3f, ceil %.3f, floor %.3f)' % (
-                i_step, score,
-                cor_scores.mean(), wall_scores.mean(),
-                ceil_scores.mean(), floor_scores.mean()))
+                i_step, losses,
+                loss_cor, loss_wallwall,
+                loss_ceilwall, loss_floorwall))
 
-    return score
+    return losses
 
 
 def optimize_cor_id(cor_id, scoreedg, scorecor, verbose=False):

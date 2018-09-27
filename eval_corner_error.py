@@ -156,7 +156,6 @@ for ith, datas in enumerate(dataset):
     opt_cor_id = optimize_cor_id(cor_id, edgmap, cormap)
     opt_cor_error = ((gt - opt_cor_id) ** 2).sum(1) ** 0.5
     opt_cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
-    print('%.6f %.6f -> %.6f' % (opt_cor_error.mean() - cor_error.mean(), cor_error.mean(), opt_cor_error.mean()))
     opt_x_error = np.abs(gt[:, 0] - opt_cor_id[:, 0]).mean()
     opt_y_error = np.abs(gt[:, 1] - opt_cor_id[:, 1]).mean()
     test_losses_opt.update('Corner error', opt_cor_error.mean())
@@ -171,6 +170,15 @@ for ith, datas in enumerate(dataset):
         test_2d3d_losses_opt.update('Corner error', opt_cor_error.mean())
         test_2d3d_losses_opt.update('X error', opt_x_error.mean())
         test_2d3d_losses_opt.update('Y error', opt_y_error.mean())
+
+    # show loss w/ wo/ opt
+    loss_from = cor_error.mean()
+    loss_to = opt_cor_error.mean()
+    loss_diff = loss_to - loss_from
+    if loss_diff <= 0:
+        print('\033[0;32m%+.6f %.6f -> %.6f\033[0;0m' % (loss_diff, loss_from, loss_to))
+    else:
+        print('\033[1;31m%+.6f %.6f -> %.6f\033[0;0m' % (loss_diff, loss_from, loss_to))
 
 print('[RESULT overall         ] %s' % (test_losses), flush=True)
 print('[RESULT overall      opt] %s' % (test_losses_opt), flush=True)
