@@ -127,7 +127,7 @@ def project2sphere_score(pc, pc_vec, pc_theta, pc_height, scoreedg, scorecor, i_
         floor_coordinates = torch.stack([floor_idx[:, 1], floor_idx[:, 0]])
         loss_floorwall -= map_coordinates(scoreedg[..., 2], floor_coordinates).mean() / len(segs)
 
-    losses = 0 * loss_cor + 1 * loss_wallwall + 1 * loss_ceilwall + 1 * loss_floorwall
+    losses = 1.0 * loss_cor + 0.1 * loss_wallwall + 0.5 * loss_ceilwall + 1.0 * loss_floorwall
 
     if i_step is not None:
         with torch.no_grad():
