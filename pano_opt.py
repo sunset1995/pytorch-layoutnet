@@ -50,19 +50,30 @@ def wallidx(xy, w, h, z1, z2):
 
 def map_coordinates(input, coordinates):
     ''' PyTorch version of scipy.ndimage.interpolation.map_coordinates
-    input: (B, C, H, W)
+    input: (H, W)
     coordinates: (2, ...)
-    mode: sampling method, options = {'nearest', 'bilinear'}
     '''
+    h = input.shape[0]
+    w = input.shape[1]
+
+    def _coordinates_pad_wrap(h, w, coordinates):
+        coordinates[0] = coordinates[0] % h
+        coordinates[1] = coordinates[1] % w
+        return coordinates
+
     co_floor = torch.floor(coordinates).long()
     co_ceil = torch.ceil(coordinates).long()
-    f00 = input[..., co_floor[0].clamp(0, input.size(-2) - 1), co_floor[1].clamp(0, input.size(-1) - 1)]
-    f10 = input[..., co_floor[0].clamp(0, input.size(-2) - 1), co_ceil[1].clamp(0, input.size(-1) - 1)]
-    f01 = input[..., co_ceil[0].clamp(0, input.size(-2) - 1), co_floor[1].clamp(0, input.size(-1) - 1)]
-    f11 = input[..., co_ceil[0].clamp(0, input.size(-2) - 1), co_ceil[1].clamp(0, input.size(-1) - 1)]
-    fx1 = f00 + (coordinates[1] - co_floor[1].float()) * (f10 - f00)
-    fx2 = f01 + (coordinates[1] - co_floor[1].float()) * (f11 - f01)
-    return fx1 + (coordinates[0] - co_floor[0].float()) * (fx2 - fx1)
+    d1 = (coordinates[1] - co_floor[1].float())
+    d2 = (coordinates[0] - co_floor[0].float())
+    co_floor = _coordinates_pad_wrap(h, w, co_floor)
+    co_ceil = _coordinates_pad_wrap(h, w, co_ceil)
+    f00 = input[co_floor[0], co_floor[1]]
+    f10 = input[co_floor[0], co_ceil[1]]
+    f01 = input[co_ceil[0], co_floor[1]]
+    f11 = input[co_ceil[0], co_ceil[1]]
+    fx1 = f00 + d1 * (f10 - f00)
+    fx2 = f01 + d1 * (f11 - f01)
+    return fx1 + d2 * (fx2 - fx1)
 
 
 def pc2cor_id(pc, pc_vec, pc_theta, pc_height):
