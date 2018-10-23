@@ -1,6 +1,6 @@
 import os
 import glob
-import torchfile
+from torch.utils.serialization import load_lua
 import numpy as np
 from scipy.io import loadmat
 from scipy.ndimage import convolve
@@ -62,7 +62,7 @@ def cvt2png(target_dir, patterns, pano_map_path):
                     assert v == 1
 
             # Parse th file
-            imgs = torchfile.load(th_path)
+            imgs = load_lua(th_path).numpy()
             assert imgs.shape[0] == len(fnames), 'number of data and gt mismatched !!!'
 
             # Dump each images to target direcotry

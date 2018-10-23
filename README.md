@@ -15,7 +15,6 @@ Sampled visualization from testing data:
 - scipy
 - Pillow
 - opencv-python>=3.1 (for pre-processing)
-- torchfile (for converting official data and pretrained weight)
 
 ## Preparation
 - Download offical [data](https://github.com/zouchuhang/LayoutNet#data) and [pretrained model](https://github.com/zouchuhang/LayoutNet#pretrained-model) as below
