@@ -10,7 +10,8 @@ from torch.utils.data import DataLoader
 from model import Encoder, Decoder
 from dataset import PanoDataset
 from utils import StatisticDict
-from pano import get_ini_cor
+from pano import get_ini_cor, pano_connect_points
+from scipy.spatial import HalfspaceIntersection, ConvexHull
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -88,6 +89,137 @@ def augment_undo(x_imgs_augmented, aug_type):
     return np.array(x_imgs)
 
 
+def eval_PE(dt_ceil_coor, dt_floor_coor, gt_ceil_coor, gt_floor_coor):
+    # Pixel surface error (3 labels: ceiling, wall, floor)
+    y0 = np.zeros(1024)
+    y1 = np.zeros(1024)
+    y0_gt = np.zeros(1024)
+    y1_gt = np.zeros(1024)
+    for j in range(4):
+        coorxy = pano_connect_points(dt_ceil_coor[j], dt_ceil_coor[(j+1)%4], -50)
+        y0[np.round(coorxy[:, 0]).astype(int)] = coorxy[:, 1]
+
+        coorxy = pano_connect_points(dt_floor_coor[j], dt_floor_coor[(j+1)%4], 50)
+        y1[np.round(coorxy[:, 0]).astype(int)] = coorxy[:, 1]
+
+        coorxy = pano_connect_points(gt_ceil_coor[j], gt_ceil_coor[(j+1)%4], -50)
+        y0_gt[np.round(coorxy[:, 0]).astype(int)] = coorxy[:, 1]
+
+        coorxy = pano_connect_points(gt_floor_coor[j], gt_floor_coor[(j+1)%4], 50)
+        y1_gt[np.round(coorxy[:, 0]).astype(int)] = coorxy[:, 1]
+
+    surface = np.zeros((512, 1024), dtype=np.int32)
+    surface[np.round(y0).astype(int), np.arange(1024)] = 1
+    surface[np.round(y1).astype(int), np.arange(1024)] = 1
+    surface = np.cumsum(surface, axis=0)
+    surface_gt = np.zeros((512, 1024), dtype=np.int32)
+    surface_gt[np.round(y0_gt).astype(int), np.arange(1024)] = 1
+    surface_gt[np.round(y1_gt).astype(int), np.arange(1024)] = 1
+    surface_gt = np.cumsum(surface_gt, axis=0)
+
+    return (surface != surface_gt).sum() / (512 * 1024)
+
+
+def np_coorx2u(coorx, coorW=1024):
+    return ((coorx + 0.5) / coorW - 0.5) * 2 * np.pi
+
+
+def np_coory2v(coory, coorH=512):
+    return -((coory + 0.5) / coorH - 0.5) * np.pi
+
+
+def np_coor2xy(coor, z=50, coorW=1024, coorH=512, floorW=1024, floorH=512):
+    '''
+    coor: N x 2, index of array in (col, row) format
+    '''
+    coor = np.array(coor)
+    u = np_coorx2u(coor[:, 0], coorW)
+    v = np_coory2v(coor[:, 1], coorH)
+    c = z / np.tan(v)
+    x = c * np.sin(u) + floorW / 2 - 0.5
+    y = -c * np.cos(u) + floorH / 2 - 0.5
+    return np.hstack([x[:, None], y[:, None]])
+
+
+def tri2halfspace(pa, pb, p):
+    v1 = pa - p
+    v2 = pb - p
+    vn = np.cross(v1, v2)
+    if -vn @ p > 0:
+        vn = -vn
+    return [*vn, -vn @ p]
+
+
+def xyzlst2halfspaces(xyz_floor, xyz_ceil):
+    '''
+    return halfspace enclose (0, 0, 0)
+    '''
+    N = xyz_floor.shape[0]
+    halfspaces = []
+    for i in range(N):
+        last_i = (i - 1 + N) % N
+        next_i = (i + 1) % N
+
+        p_floor_a = xyz_floor[last_i]
+        p_floor_b = xyz_floor[next_i]
+        p_floor = xyz_floor[i]
+        p_ceil_a = xyz_ceil[last_i]
+        p_ceil_b = xyz_ceil[next_i]
+        p_ceil = xyz_ceil[i]
+        halfspaces.append(tri2halfspace(p_floor_a, p_floor_b, p_floor))
+        halfspaces.append(tri2halfspace(p_floor_a, p_ceil, p_floor))
+        halfspaces.append(tri2halfspace(p_ceil, p_floor_b, p_floor))
+        halfspaces.append(tri2halfspace(p_ceil_a, p_ceil_b, p_ceil))
+        halfspaces.append(tri2halfspace(p_ceil_a, p_floor, p_ceil))
+        halfspaces.append(tri2halfspace(p_floor, p_ceil_b, p_ceil))
+    return np.array(halfspaces)
+
+
+def eval_3diou(dt_floor_coor, dt_ceil_coor, gt_floor_coor, gt_ceil_coor, ch=-1.6,
+               coorW=1024, coorH=512, floorW=1024, floorH=512):
+    dt_floor_coor = np.array(dt_floor_coor)
+    dt_ceil_coor = np.array(dt_ceil_coor)
+    gt_floor_coor = np.array(gt_floor_coor)
+    gt_ceil_coor = np.array(gt_ceil_coor)
+    assert (dt_floor_coor[:, 0] != dt_ceil_coor[:, 0]).sum() == 0
+    assert (gt_floor_coor[:, 0] != gt_ceil_coor[:, 0]).sum() == 0
+    N = len(dt_floor_coor)
+    dt_floor_xyz = np.hstack([
+        np_coor2xy(dt_floor_coor, ch, coorW, coorH, floorW=1, floorH=1),
+        np.zeros((N, 1)) + ch,
+    ])
+    gt_floor_xyz = np.hstack([
+        np_coor2xy(gt_floor_coor, ch, coorW, coorH, floorW=1, floorH=1),
+        np.zeros((N, 1)) + ch,
+    ])
+    dt_c = np.sqrt((dt_floor_xyz[:, :2] ** 2).sum(1))
+    gt_c = np.sqrt((gt_floor_xyz[:, :2] ** 2).sum(1))
+    dt_v2 = np_coory2v(dt_ceil_coor[:, 1], coorH)
+    gt_v2 = np_coory2v(gt_ceil_coor[:, 1], coorH)
+    dt_ceil_z = dt_c * np.tan(dt_v2)
+    gt_ceil_z = gt_c * np.tan(gt_v2)
+
+    dt_ceil_xyz = dt_floor_xyz.copy()
+    dt_ceil_xyz[:, 2] = dt_ceil_z
+    gt_ceil_xyz = gt_floor_xyz.copy()
+    gt_ceil_xyz[:, 2] = gt_ceil_z
+
+    dt_halfspaces = xyzlst2halfspaces(dt_floor_xyz, dt_ceil_xyz)
+    gt_halfspaces = xyzlst2halfspaces(gt_floor_xyz, gt_ceil_xyz)
+
+    in_halfspaces = HalfspaceIntersection(np.concatenate([dt_halfspaces, gt_halfspaces]),
+                                          np.zeros(3))
+    dt_halfspaces = HalfspaceIntersection(dt_halfspaces, np.zeros(3))
+    gt_halfspaces = HalfspaceIntersection(gt_halfspaces, np.zeros(3))
+
+    in_volume = ConvexHull(in_halfspaces.intersections).volume
+    dt_volume = ConvexHull(dt_halfspaces.intersections).volume
+    gt_volume = ConvexHull(gt_halfspaces.intersections).volume
+    un_volume = dt_volume + gt_volume - in_volume
+
+    return in_volume / un_volume
+
+
 test_losses = StatisticDict()
 test_pano_losses = StatisticDict()
 test_2d3d_losses = StatisticDict()
@@ -122,20 +254,20 @@ for ith, datas in enumerate(dataset):
     # Compute normalized corner error
     cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5
     cor_error /= np.sqrt(cor_img.shape[0] ** 2 + cor_img.shape[1] ** 2)
-    x_error = np.abs(gt[:, 0] - cor_id[:, 0]).mean()
-    y_error = np.abs(gt[:, 1] - cor_id[:, 1]).mean()
-    test_losses.update('Corner error', cor_error.mean())
-    test_losses.update('X error', x_error.mean())
-    test_losses.update('Y error', y_error.mean())
+    pe_error = eval_PE(cor_id[0::2], cor_id[1::2], gt[0::2], gt[1::2])
+    iou3d = eval_3diou(cor_id[1::2], cor_id[0::2], gt[1::2], gt[0::2])
+    test_losses.update('CE(%)', cor_error.mean() * 100)
+    test_losses.update('PE(%)', pe_error * 100)
+    test_losses.update('3DIoU', iou3d)
 
     if k.startswith('pano'):
-        test_pano_losses.update('Corner error', cor_error.mean())
-        test_pano_losses.update('X error', x_error.mean())
-        test_pano_losses.update('Y error', y_error.mean())
+        test_pano_losses.update('CE(%)', cor_error.mean() * 100)
+        test_pano_losses.update('PE(%)', pe_error * 100)
+        test_pano_losses.update('3DIoU', iou3d)
     else:
-        test_2d3d_losses.update('Corner error', cor_error.mean())
-        test_2d3d_losses.update('X error', x_error.mean())
-        test_2d3d_losses.update('Y error', y_error.mean())
+        test_2d3d_losses.update('CE(%)', cor_error.mean() * 100)
+        test_2d3d_losses.update('PE(%)', pe_error * 100)
+        test_2d3d_losses.update('3DIoU', iou3d)
 
 print('[RESULT overall     ] %s' % (test_losses), flush=True)
 print('[RESULT panocontext ] %s' % (test_pano_losses), flush=True)
