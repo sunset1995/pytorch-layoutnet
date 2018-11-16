@@ -14,6 +14,7 @@ Sampled visualization from testing data:
 - numpy
 - scipy
 - Pillow
+- torchfile
 - opencv-python>=3.1 (for pre-processing)
 
 ## Preparation
