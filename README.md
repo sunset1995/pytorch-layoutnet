@@ -3,7 +3,7 @@ This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/18
 What difference from official:
 - **Architecture**: Only joint *bounday branch* and *corner branch* are implemented as the paper states that "Training with 3D regressor has a small impact".
 - **Pre-processing**: Implementation of *line segment detector* and *pano image alignment* are converted from matlab to python in `pano.py` and `pano_lsd_align.py`.
-- **Post-processing**: No 3D layout optimization. Alternatively, this repo implement a gradient descent optimizing the similar loss. It take less than 2 seconds on CPU and found slightly better result than offical reported.
+- **Post-processing**: No 3D layout optimization. Alternatively, this repo implement a gradient ascent optimizing the similar loss. (see below for more detail)
 
 Use this repo, you can:
 - extract/visualize layout of your own 360 images with my trained network
@@ -86,7 +86,7 @@ Use this repo, you can:
         ```
 
 
-## Preparation
+## Preparation for Training
 - Download offical [data](https://github.com/zouchuhang/LayoutNet#data) and [pretrained model](https://github.com/zouchuhang/LayoutNet#pretrained-model) as below
 ```
 /pytorch-layoutnet 
@@ -98,7 +98,7 @@ Use this repo, you can:
     /panofull_*_pretrained.t7  (download and extract from official)
 ```
 - Execute `python torch2pytorch_data.py` to convert `data/origin/**/*` to `data/train`, `data/valid` and `data/test` for pytorch data loader. Under these folder, `img/` contains all raw rgb `.png` while `line/`, `edge/`, `cor/` contain preprocessed Manhattan line segment, ground truth boundary and ground truth corner respectively.
-- Use `torch2pytorch_pretrained_weight.py` to convert official pretrained pano model to `encoder`, `edg_decoder`, `cor_decoder` pytorch `state_dict` (see `python torch2pytorch_pretrained_weight.py -h` for more detailed). examples:
+- [optional] Use `torch2pytorch_pretrained_weight.py` to convert official pretrained pano model to `encoder`, `edg_decoder`, `cor_decoder` pytorch `state_dict` (see `python torch2pytorch_pretrained_weight.py -h` for more detailed). examples:
   - to convert layout pretrained only
     ```
     python torch2pytorch_pretrained_weight.py --torch_pretrained ckpt/panofull_joint_box_pretrained.t7 --encoder ckpt/pre_full_encoder.pth --edg_decoder ckpt/pre_full_edg_decoder.pth --cor_decoder ckpt/pre_full_cor_decoder.pth
@@ -120,13 +120,34 @@ To train only using RGB channels as input (no Manhattan line segment):
 python train.py --id exp_rgb --input_cat img --input_channels 3
 ```
 
+## Gradient Ascent Post Optimization
+Instead of offical 3D layout optimization with sampling strategy, this repo implement a gradient ascent optimization algorithm to minimize the similar loss of official.  
+The process abstract below:
+1. greedily extract the cuboid parameter from corner/edge probability map
+    - The cuboid are consist of the 6 parameters (`cx`, `cy`, `dx`, `dy`, `theta`, `h`)
+    - `corner probability map`   | `edge probability map`
+      :------------------------: | :------------------------:
+      ![](assert/output/demo_aligned_rgb_cor.png) | ![](assert/output/demo_aligned_rgb_edg.png)
+2. sample points alone the cuboid boundary and project them to equirectangular formatted corner/edge probability map
+    - The sample projected points are visualized as green dot
+    - <img src="assert/output/demo_aligned_rgb_all.png" width=300>
+3. for each projected sample point, getting value by bilinear interpolation from nearest 4 neighbor pixel on the corner/edge probability map
+4. all the sampled values are reduced to a single scalar called score
+5. compute the gradient for the 6 cuboid parameter to maximize the score
+6. Iterative apply gradient ascent (step 2 through 6)
+
+It take less than 2 seconds on CPU and found slightly better result than offical reported. 
+
+
 ## Quantitative Evaluation
-See `python eval.py -h` and `python eval_corner_error.py -h` for more detailed arguments explanation. Examples:  
+See `python eval.py -h` for more detailed arguments explanation. To get the result from my trained network (link above):
 ```
-python eval_ce_pe_3diou.py --path_prefix ckpt/exp_default/epoch_30
-python eval_corner_error.py --path_prefix ckpt/exp_default/epoch_30 --rotate 0.5 --flip
+python eval.py --path_prefix ckpt/epoch_30 --flip --rotate 0.333 0.666
 ```
-*Note* - Official 3D layout optimization is not implemented. Instead, this repo implement gradient descent to minimize the similar loss from official paper. Add `--post_optimization`
+To evaluate with gradient ascent post optimization:
+```
+python eval.py --path_prefix ckpt/epoch_30 --flip --rotate 0.333 0.666 --post_optimization
+```
 
 #### Dataset - PanoContext
 | exp | 3D IoU(%) | Corner error(%) | Pixel error(%) |
