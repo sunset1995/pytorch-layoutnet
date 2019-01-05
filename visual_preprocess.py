@@ -1,6 +1,6 @@
-'''
-Author: sunset1995 (https://github.com/sunset1995)
-
+__author__ = 'Cheng Sun (https://github.com/sunset1995)'
+__email__ = 'chengsun@gapp.nthu.edu.tw'
+__description__ = '''
 This script preprocess the given 360 panorama image under euqirectangular projection
 and dump them to the given directory for further layout prediction and visualization.
 The script will:
@@ -22,7 +22,8 @@ from pano import draw_boundary
 from pano_lsd_align import panoEdgeDetection, rotatePanorama
 
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 description=__description__)
 # I/O related arguments
 parser.add_argument('--img_glob', required=True,
                     help='NOTE: Remeber to quote your glob path.')
@@ -32,13 +33,17 @@ parser.add_argument('--q_error', default=0.7, type=float)
 parser.add_argument('--refine_iter', default=3, type=int)
 args = parser.parse_args()
 
+paths = sorted(glob.glob(args.img_glob))
+if len(paths) == 0:
+    print('no images found')
+
 # Check input arguments validation
-for path in glob.glob(args.img_glob):
+for path in paths:
     assert os.path.isfile(path), '%s not found' % path
 assert os.path.isdir(args.output_dir), '%s is not a directory' % args.output_dir
 
 # Process each input
-for i_path in sorted(glob.glob(args.img_glob)):
+for i_path in paths:
     print('Processing', i_path, flush=True)
 
     # Load and cat input images
