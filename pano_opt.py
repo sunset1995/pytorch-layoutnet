@@ -150,7 +150,7 @@ def project2sphere_score(pc, pc_vec, pc_theta, pc_height, scoreedg, scorecor, i_
     return losses
 
 
-def optimize_cor_id(cor_id, scoreedg, scorecor, verbose=False):
+def optimize_cor_id(cor_id, scoreedg, scorecor, num_iters=100, verbose=False):
     assert scoreedg.shape == (512, 1024, 3)
     assert scorecor.shape == (512, 1024)
 
@@ -182,7 +182,7 @@ def optimize_cor_id(cor_id, scoreedg, scorecor, verbose=False):
 
     best = {'score': 1e9}
 
-    for i_step in range(300):
+    for i_step in range(num_iters):
         i = i_step if verbose else None
         optimizer.zero_grad()
         score = project2sphere_score(pc, pc_vec, pc_theta, pc_height, scoreedg, scorecor, i)

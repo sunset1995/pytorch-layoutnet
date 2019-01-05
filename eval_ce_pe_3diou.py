@@ -11,6 +11,7 @@ from model import Encoder, Decoder
 from dataset import PanoDataset
 from utils import StatisticDict
 from pano import get_ini_cor, pano_connect_points
+from pano_opt import optimize_cor_id
 from scipy.spatial import HalfspaceIntersection, ConvexHull
 
 
@@ -39,6 +40,8 @@ parser.add_argument('--rotate', nargs='*', default=[], type=float,
                     help='whether to perfome horizontal rotate. '
                          'each elements indicate fraction of image width. '
                          '# of input xlen(rotate).')
+parser.add_argument('--post_optimization', action='store_true',
+                    help='whether to performe post gd optimization')
 args = parser.parse_args()
 device = torch.device(args.device)
 
@@ -234,12 +237,15 @@ for ith, datas in enumerate(dataset):
         en_list = encoder(x_augmented)
         edg_de_list = edg_decoder(en_list[::-1])
         cor_de_list = cor_decoder(en_list[-1:] + edg_de_list[:-1])
+        edg_tensor = torch.sigmoid(edg_de_list[-1])
         cor_tensor = torch.sigmoid(cor_de_list[-1])
 
         # Recover the effect from augmentation
+        edg_img = augment_undo(edg_tensor.cpu().numpy(), aug_type)
         cor_img = augment_undo(cor_tensor.cpu().numpy(), aug_type)
 
         # Merge all results from augmentation
+        edg_img = edg_img.transpose([0, 2, 3, 1]).mean(0)
         cor_img = cor_img.transpose([0, 2, 3, 1]).mean(0)[..., 0]
 
     # Load ground truth corner label
@@ -250,6 +256,11 @@ for ith, datas in enumerate(dataset):
 
     # Construct corner label from predicted corner map
     cor_id = get_ini_cor(cor_img, args.d1, args.d2)
+
+    # Gradient descent optimization
+    if args.post_optimization:
+        cor_id = optimize_cor_id(cor_id, edg_img, cor_img,
+                                 num_iters=100, verbose=False)
 
     # Compute normalized corner error
     cor_error = ((gt - cor_id) ** 2).sum(1) ** 0.5

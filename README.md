@@ -65,28 +65,31 @@ To train only using RGB channels as input (no Manhattan line segment):
 python train.py --id exp_rgb --input_cat img --input_channels 3
 ```
 
-## Evaluation
+## Quantitative Evaluation
 See `python eval.py -h` and `python eval_corner_error.py -h` for more detailed arguments explanation. Examples:  
 ```
-python eval.py --path_prefix ckpt/exp_default/epoch_30
+python eval_ce_pe_3diou.py --path_prefix ckpt/exp_default/epoch_30
 python eval_corner_error.py --path_prefix ckpt/exp_default/epoch_30 --rotate 0.5 --flip
 ```
-*Note* - post-processing component, 3D layout optimization, is not implemented. Alternatively, algorithm yieling initial corner guess are modified to get better result.  
+*Note* - Official 3D layout optimization is not implemented. Instead, this repo implement gradient descent to minimize the similar loss from official paper. Add `--post_optimization`
 
-| exp | edg loss | cor loss | Corner error (%) |
+#### Dataset - PanoContext
+| exp | 3D IoU(%) | Corner error(%) | Pixel error(%) |
 | :-: | :------: | :------: | :--------------: |
-| panofull_joint_box_pretrained | `0.128767` | `0.085045` | `1.35` | 
-| default setting               | `0.116559` | `0.077435` | `0.98` |
-| rgb  only                     | `0.124780` | `0.085284` | `1.43` |
+| Official best  | `75.12` | `1.02` | `3.18` |
+| ours rgb only  | `71.42` | `1.30` | `3.83` |
+| ours rgb only <br> w/ gd opt | `72.52` | `1.50` | `3.66` | 
+| ours           | `75.11` | `1.04` | `3.16` |
+| ours <br> w/ gd opt | **`76.90`** | **`0.93`** | **`2.81`** |
 
-- Columns
-  - `edg loss` - training objective
-  - `cor loss` - training objective
-  - `Corner error` - L2 distance between ground truth and predicted corner positions normalized by image diagonal
-- Rows
-  - `panofull_joint_box_pretrained` - state_dict directly converted from official
-  - `default setting` - all hyperparameters are not modified
-  - `rgb only` - model only trained with rgb, no line detection as extra features
+#### Dataset - Stanford 2D-3D
+| exp | 3D IoU(%) | Corner error(%) | Pixel error(%) |
+| :-: | :------: | :------: | :--------------: |
+| Official best  | `77.51` | `0.92` | **`2.42`** |
+| ours rgb only  | `70.39` | `1.50` | `4.28` |
+| ours rgb only <br> w/ gd opt | `71.90` | `1.35` | `4.25` | 
+| ours           | `75.49` | `0.96` | `3.07` |
+| ours <br> w/ gd opt | **`78.90`** | **`0.88`** | `2.78` |
 
 
 ## References
