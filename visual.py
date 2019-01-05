@@ -126,6 +126,10 @@ for i_path, l_path in zip(img_paths, line_paths):
 
     cormap = cor_img[..., 0].copy()
 
+    basename = os.path.splitext(os.path.basename(i_path))[0]
+    Image.fromarray((edg_img * 255).astype(np.uint8)).save(os.path.join(args.output_dir, '%s_bononly.png' % basename))
+    Image.fromarray((cor_img[..., 0] * 255).astype(np.uint8)).save(os.path.join(args.output_dir, '%s_coronly.png' % basename))
+
     # Generate boundary image
     bon_img = draw_boundary(cormap.copy(), i_img * 255)
 
@@ -147,3 +151,7 @@ for i_path, l_path in zip(img_paths, line_paths):
     Image.fromarray((cor_img * 255).astype(np.uint8)).save(cor_path)
     Image.fromarray(bon_img).save(bon_path)
     Image.fromarray(all_in_one).save(all_in_one_path)
+
+    edgonly = np.zeros((512, 1024, 3))
+    edgonly = draw_boundary(cormap.copy(), edgonly)[..., 1]
+    Image.fromarray(edgonly.astype(np.uint8)).save(os.path.join(args.output_dir, '%s_edgonly.png' % basename))

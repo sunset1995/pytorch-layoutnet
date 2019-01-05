@@ -5,6 +5,8 @@ import numpy as np
 import numpy.matlib as matlib
 import scipy.signal
 from scipy.ndimage import convolve
+from scipy.ndimage import map_coordinates
+from pano_opt import optimize_cor_id
 
 
 def find_N_peaks(signal, prominence, distance, N=4):
@@ -16,6 +18,71 @@ def find_N_peaks(signal, prominence, distance, N=4):
     pk_loc = locs[pk_id[:min(N, len(pks))]]
     pk_loc = np.sort(pk_loc)
     return pk_loc, signal[pk_loc]
+
+
+def constraint_cor_id_same_z(cor_id, cor_img, z=-1):
+    # Convert to uv space
+    cor_id_u = ((cor_id[:, 0] + 0.5) / cor_img.shape[1] - 0.5) * 2 * np.pi
+    cor_id_v = ((cor_id[:, 1] + 0.5) / cor_img.shape[0] - 0.5) * np.pi
+
+    # Convert to xyz space (z=-1)
+    cor_id_c = z / np.tan(cor_id_v)
+    cor_id_xy = np.stack([
+        cor_id_c * np.cos(cor_id_u),
+        cor_id_c * np.sin(cor_id_u),
+    ], axis=0).T
+
+    # Fix 2 diagonal corner, move the others
+    cor_id_score = map_coordinates(cor_img, [cor_id[:, 1], cor_id[:, 0]])
+    if cor_id_score[0::2].sum() > cor_id_score[1::2].sum():
+        idx0, idx1 = 0, 1
+    else:
+        idx0, idx1 = 1, 0
+    pc = cor_id_xy[idx0::2].mean(0, keepdims=True)
+    radius2 = np.sqrt(((cor_id_xy[idx0::2] - pc) ** 2).sum(1)).mean()
+    d = cor_id_xy[idx1::2] - pc
+    d1 = d[0]
+    d2 = d[1]
+    theta1 = (np.arctan2(d1[1], d1[0]) + 2 * np.pi) % (2 * np.pi)
+    theta2 = (np.arctan2(d2[1], d2[0]) + 2 * np.pi) % (2 * np.pi)
+    theta2 = theta2 - np.pi
+    theta2 = (theta2 + 2 * np.pi) % (2 * np.pi)
+    theta = (theta1 + theta2) / 2
+    d[0] = (radius2 * np.cos(theta), radius2 * np.sin(theta))
+    theta = theta - np.pi
+    d[1] = (radius2 * np.cos(theta), radius2 * np.sin(theta))
+
+    cor_id_xy[idx1::2] = pc + d
+
+    # Convert refined xyz back to uv space
+    cor_id_uv = np.stack([
+        np.arctan2(cor_id_xy[:, 1], cor_id_xy[:, 0]),
+        np.arctan2(z, np.sqrt((cor_id_xy ** 2).sum(1))),
+    ], axis=0).T
+
+    # Convert to image index
+    col = (cor_id_uv[:, 0] / (2 * np.pi) + 0.5) * cor_img.shape[1] - 0.5
+    row = (cor_id_uv[:, 1] / np.pi + 0.5) * cor_img.shape[0] - 0.5
+    return np.stack([col, row], axis=0).T, cor_id_xy
+
+
+def fit_avg_z(cor_id, cor_id_xy, cor_img):
+    score = map_coordinates(cor_img, [cor_id[:, 1], cor_id[:, 0]])
+    c = np.sqrt((cor_id_xy ** 2).sum(1))
+    cor_id_v = ((cor_id[:, 1] + 0.5) / cor_img.shape[0] - 0.5) * np.pi
+    z = c * np.tan(cor_id_v)
+    fit_z = (z * score).sum() / score.sum()
+    return fit_z
+
+
+def constraint_cor_id_on_xy(cor_id, cor_id_xy, cor_img):
+    c = np.sqrt((cor_id_xy ** 2).sum(1))
+    z = fit_avg_z(cor_id, cor_id_xy, cor_img)
+
+    # Convert to image index
+    col = cor_id[:, 0].copy()
+    row = (np.arctan2(z, c) / np.pi + 0.5) * cor_img.shape[0] - 0.5
+    return np.stack([col, row], axis=0).T
 
 
 def get_ini_cor(cor_img, d1=21, d2=3):
@@ -31,7 +98,10 @@ def get_ini_cor(cor_img, d1=21, d2=3):
                               distance=20, N=2)[0]
         cor_id.append((x, y1))
         cor_id.append((x, y2))
-    return np.array(cor_id)
+
+    cor_id = np.array(cor_id, np.float64)
+
+    return cor_id
 
 
 def coords2uv(coords, width, height):
@@ -193,14 +263,21 @@ def lineIdxFromCors(cor_all, im_w, im_h):
     return rs, cs
 
 
-def draw_boundary(cor_src, img_src=None):
+def draw_boundary(cor_src, img_src=None, post_optimize=False, edg_src=None):
     '''
     @cor_src (numpy array H x W x 1, [0, 255])
         model output corner probability map
     @img_src (numpy array H x W x 3, [0, 255])
     '''
+    assert not post_optimize or edg_src is not None
+
     im_h, im_w = cor_src.shape
     cor_id = get_ini_cor(cor_src)
+    if post_optimize:
+        assert len(edg_src.shape) == 3
+        assert edg_src.shape[:2] == cor_src.shape[:2]
+        assert edg_src.shape[2] == 3
+        cor_id = optimize_cor_id(cor_id, edg_src, cor_src)
     cor_all = [cor_id]
     for i in range(len(cor_id)):
         cor_all.append(cor_id[i, :])
