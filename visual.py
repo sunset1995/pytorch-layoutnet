@@ -6,7 +6,9 @@ from PIL import Image
 
 import torch
 from model import Encoder, Decoder
-from pano import draw_boundary
+from utils_eval import augment, augment_undo
+from pano import get_ini_cor, draw_boundary_from_cor_id
+from pano_opt import optimize_cor_id
 
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -31,9 +33,13 @@ parser.add_argument('--rotate', nargs='*', default=[], type=float,
                     help='whether to perfome horizontal rotate. '
                          'each elements indicate fraction of image width. '
                          '# of input xlen(rotate).')
-# Visualization related arguments
-parser.add_argument('--alpha', default=0.8, type=float,
-                    help='weight to composite output with origin rgb image.')
+# Post porcessing related arguments
+parser.add_argument('--d1', default=21, type=int,
+                    help='Post-processing parameter.')
+parser.add_argument('--d2', default=3, type=int,
+                    help='Post-processing parameter.')
+parser.add_argument('--post_optimization', action='store_true',
+                    help='whether to performe post gd optimization')
 args = parser.parse_args()
 device = torch.device(args.device)
 
@@ -43,7 +49,6 @@ for path in glob.glob(args.img_glob):
 for path in glob.glob(args.line_glob):
     assert os.path.isfile(path), '%s not found' % path
 assert os.path.isdir(args.output_dir), '%s is not a directory' % args.output_dir
-assert 0 <= args.alpha and args.alpha <= 1, '--arpha should in [0, 1]'
 for rotate in args.rotate:
     assert 0 <= rotate and rotate <= 1, 'elements in --rotate should in [0, 1]'
 
@@ -63,34 +68,6 @@ line_paths = sorted(glob.glob(args.line_glob))
 assert len(img_paths) == len(line_paths), '# of input mismatch for each channels'
 
 
-def augment(x_img):
-    aug_type = ['']
-    x_imgs_augmented = [x_img]
-    if args.flip:
-        aug_type.append('flip')
-        x_imgs_augmented.append(np.flip(x_img, axis=-1))
-    for rotate in args.rotate:
-        shift = int(round(rotate * x_img.shape[-1]))
-        aug_type.append('rotate %d' % shift)
-        x_imgs_augmented.append(np.roll(x_img, shift, axis=-1))
-    return np.array(x_imgs_augmented), aug_type
-
-
-def augment_undo(x_imgs_augmented, aug_type):
-    x_imgs = []
-    for x_img, aug in zip(x_imgs_augmented, aug_type):
-        if aug == 'flip':
-            x_imgs.append(np.flip(x_img, axis=-1))
-        elif aug.startswith('rotate'):
-            shift = int(aug.split()[-1])
-            x_imgs.append(np.roll(x_img, -shift, axis=-1))
-        elif aug == '':
-            x_imgs.append(x_img)
-        else:
-            raise NotImplementedError()
-    return np.array(x_imgs)
-
-
 # Process each input
 for i_path, l_path in zip(img_paths, line_paths):
     print('img  path:', i_path)
@@ -104,7 +81,7 @@ for i_path, l_path in zip(img_paths, line_paths):
         l_img.transpose([2, 0, 1])], axis=0)
 
     # Augment data
-    x_imgs_augmented, aug_type = augment(x_img)
+    x_imgs_augmented, aug_type = augment(x_img, args.flip, args.rotate)
 
     # Feedforward and extract output images
     with torch.no_grad():
@@ -120,38 +97,35 @@ for i_path, l_path in zip(img_paths, line_paths):
         edg_img = augment_undo(edg_tensor.cpu().numpy(), aug_type)
         cor_img = augment_undo(cor_tensor.cpu().numpy(), aug_type)
 
-        # Merge all results from augmentation
-        edg_img = edg_img.transpose([0, 2, 3, 1]).mean(0)
-        cor_img = cor_img.transpose([0, 2, 3, 1]).mean(0)
+    # Merge all results from augmentation
+    edgmap = edg_img.transpose([0, 2, 3, 1]).mean(0).copy()
+    cormap = cor_img.transpose([0, 2, 3, 1]).mean(0)[..., 0].copy()
 
-    cormap = cor_img[..., 0].copy()
+    # Post processing to extract layout
+    cor_id = get_ini_cor(cormap, args.d1, args.d2)
+    if args.post_optimization:
+        cor_id = optimize_cor_id(cor_id, edgmap, cormap,
+                                 num_iters=100, verbose=False)
 
+    # Draw extracted layout on source image
+    bon_img = draw_boundary_from_cor_id(cor_id.copy(), i_img * 255)
+
+    # Composite all result in one image
+    all_in_one = 0.3 * edgmap + 0.3 * cormap[..., None] + 0.4 * i_img
+    all_in_one = draw_boundary_from_cor_id(cor_id.copy(), all_in_one * 255)
+
+    # Dump results
     basename = os.path.splitext(os.path.basename(i_path))[0]
-    Image.fromarray((edg_img * 255).astype(np.uint8)).save(os.path.join(args.output_dir, '%s_bononly.png' % basename))
-    Image.fromarray((cor_img[..., 0] * 255).astype(np.uint8)).save(os.path.join(args.output_dir, '%s_coronly.png' % basename))
+    path_edg = os.path.join(args.output_dir, '%s_edg.png' % basename)
+    path_cor = os.path.join(args.output_dir, '%s_cor.png' % basename)
+    path_bon = os.path.join(args.output_dir, '%s_bon.png' % basename)
+    path_all_in_one = os.path.join(args.output_dir, '%s_all.png' % basename)
+    path_cor_id = os.path.join(args.output_dir, '%s_cor_id.txt' % basename)
 
-    # Generate boundary image
-    bon_img = draw_boundary(cormap.copy(), i_img * 255)
-
-    # Composite output image with rgb image
-    edg_img = args.alpha * edg_img + (1 - args.alpha) * i_img
-    cor_img = args.alpha * cor_img + (1 - args.alpha) * i_img
-
-    # All in one image
-    all_in_one = 0.3 * edg_img + 0.3 * cor_img + 0.4 * i_img
-    all_in_one = draw_boundary(cormap.copy(), all_in_one * 255)
-
-    # Dump result
-    basename = os.path.splitext(os.path.basename(i_path))[0]
-    edg_path = os.path.join(args.output_dir, '%s_edg.png' % basename)
-    cor_path = os.path.join(args.output_dir, '%s_cor.png' % basename)
-    bon_path = os.path.join(args.output_dir, '%s_bon.png' % basename)
-    all_in_one_path = os.path.join(args.output_dir, '%s_all.png' % basename)
-    Image.fromarray((edg_img * 255).astype(np.uint8)).save(edg_path)
-    Image.fromarray((cor_img * 255).astype(np.uint8)).save(cor_path)
-    Image.fromarray(bon_img).save(bon_path)
-    Image.fromarray(all_in_one).save(all_in_one_path)
-
-    edgonly = np.zeros((512, 1024, 3))
-    edgonly = draw_boundary(cormap.copy(), edgonly)[..., 1]
-    Image.fromarray(edgonly.astype(np.uint8)).save(os.path.join(args.output_dir, '%s_edgonly.png' % basename))
+    Image.fromarray((edgmap * 255).astype(np.uint8)).save(path_edg)
+    Image.fromarray((cormap * 255).astype(np.uint8)).save(path_cor)
+    Image.fromarray(bon_img).save(path_bon)
+    Image.fromarray(all_in_one).save(path_all_in_one)
+    with open(path_cor_id, 'w') as f:
+        for x, y in cor_id:
+            f.write('%.6f %.6f\n' % (x, y))

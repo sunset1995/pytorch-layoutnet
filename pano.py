@@ -297,6 +297,22 @@ def draw_boundary(cor_src, img_src=None, post_optimize=False, edg_src=None):
     return panoEdgeC
 
 
+def draw_boundary_from_cor_id(cor_id, img_src):
+    im_h, im_w = img_src.shape[:2]
+    cor_all = [cor_id]
+    for i in range(len(cor_id)):
+        cor_all.append(cor_id[i, :])
+        cor_all.append(cor_id[(i+2)%len(cor_id), :])
+    cor_all = np.vstack(cor_all)
+
+    rs, cs = lineIdxFromCors(cor_all, im_w, im_h)
+
+    panoEdgeC = img_src.astype(np.uint8)
+    panoEdgeC[rs, cs, 1] = 255
+
+    return panoEdgeC
+
+
 def coorx2u(x, w=1024):
     return ((x + 0.5) / w - 0.5) * 2 * np.pi
 
