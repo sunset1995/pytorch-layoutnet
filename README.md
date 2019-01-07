@@ -5,6 +5,9 @@ What difference from official:
 - **Pre-processing**: Implementation of *line segment detector* and *pano image alignment* are converted from matlab to python in `pano.py` and `pano_lsd_align.py`.
 - **Post-processing**: No 3D layout optimization. Alternatively, this repo implement a gradient ascent optimizing the similar loss. (see below for more detail)
 
+Overview of the pipeline:
+![](assert/pipeline.png)
+
 Use this repo, you can:
 - extract/visualize layout of your own 360 images with my trained network
 - reproduce official experiments

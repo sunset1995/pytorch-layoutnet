@@ -306,9 +306,12 @@ def draw_boundary_from_cor_id(cor_id, img_src):
     cor_all = np.vstack(cor_all)
 
     rs, cs = lineIdxFromCors(cor_all, im_w, im_h)
+    rs = np.array(rs)
+    cs = np.array(cs)
 
     panoEdgeC = img_src.astype(np.uint8)
-    panoEdgeC[rs, cs, 1] = 255
+    for dx, dy in [[-1, 0], [1, 0], [0, 0], [0, 1], [0, -1]]:
+        panoEdgeC[np.clip(rs+dx, 0, im_h-1), np.clip(cs+dy, 0, im_w-1), 1] = 255
 
     return panoEdgeC
 
