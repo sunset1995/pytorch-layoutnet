@@ -99,10 +99,10 @@ if __name__ == '__main__':
     parser.add_argument('--layout', default='assert/output/demo_aligned_rgb_cor_id.txt',
                         help='Txt file containing layout corners (cor_id)')
     parser.add_argument('--camera_height', default=1.6, type=float,
-                        help='Camera height in meter')
-    parser.add_argument('--ppm', default=100, type=int,
+                        help='Camera height in meter (not the viewer camera)')
+    parser.add_argument('--ppm', default=150, type=int,
                         help='Points per meter')
-    parser.add_argument('--point_size', default=0.001, type=int,
+    parser.add_argument('--point_size', default=0.0025, type=int,
                         help='Point size')
     parser.add_argument('--alpha', default=1.0, type=float,
                         help='Opacity of the texture')

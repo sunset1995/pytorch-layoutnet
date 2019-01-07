@@ -20,6 +20,9 @@ Use this repo, you can:
 - Pillow
 - torchfile
 - opencv-python>=3.1 (for pre-processing)
+- pptk (for layout 3D viewer)
+  - Workaround in this [issue](https://github.com/heremaps/pptk/issues/3) is required on my Ubuntu 18.04
+- shapely (for layout 3D viewer)
 
 
 ## Visualization
@@ -31,7 +34,7 @@ Use this repo, you can:
 - Download the trained model from [here (350M)](). Put the 3 files extracted from the downloaded zip under `ckpt/` folder.
     - So you will get `ckpt/epoch_30_*.pth`
 
-### 2. Pre-processing
+### 2. Pre-processing (Align camera pose with floor)
 - Pre-process the above `assert/demo.png` by firing below command. See `python visual_preprocess.py -h` for more detailed script description.
     ```
     python visual_preprocess.py --img_glob assert/demo.png --output_dir assert/output_preprocess/
@@ -84,6 +87,19 @@ Use this repo, you can:
         898.234619 190.629089
         898.234619 332.616364
         ```
+
+### 4. Layout 3D Viewer
+- A pure python script to visualize the predicted layout in 3D using points cloud. Below command will visualize the result store in `assert/`
+    ```
+    python visual_3d_layout.py --ignore_ceiling
+    ```
+- Arguements explanationL
+    - `--img` path to aligned 360 image
+    - `--layout` path to the txt stroing the `cor_id` (predicted or ground truth)
+    - `--ignore_ceiling` prevent rendering ceiling
+    - for more arguments, see `python visual_3d_layout.py -h`
+- ![](assert/demo_3d_layout.jpeg)
+    - In the window, you can use mouse and scroll to change the viewport
 
 
 ## Preparation for Training
