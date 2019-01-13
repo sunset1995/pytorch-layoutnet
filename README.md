@@ -34,7 +34,7 @@ Use this repo, you can:
 - Get your fasinated 360 room images. I will use `assert/demo.png` for example.
     - ![](assert/demo.png)
 - Prepare the enviroment to run the python scripts.
-- Download the trained model from [here (350M)](). Put the 3 files extracted from the downloaded zip under `ckpt/` folder.
+- Download the trained model from [here (350M)](https://drive.google.com/file/d/1ZlXc4DLgOrkDLW6kQbCY-wOJ8bw4DYu2/view?usp=sharing). Put the 3 files extracted from the downloaded zip under `ckpt/` folder.
     - So you will get `ckpt/epoch_30_*.pth`
 
 ### 2. Pre-processing (Align camera pose with floor)
