@@ -94,7 +94,7 @@ Use this repo, you can:
 ### 4. Layout 3D Viewer
 - A pure python script to visualize the predicted layout in 3D using points cloud. Below command will visualize the result store in `assert/`
     ```
-    python visual_3d_layout.py --ignore_ceiling
+    python visual_3d_layout.py --ignore_ceiling --img assert/output_preprocess/demo_aligned_rgb.png --layout  assert/output/demo_aligned_rgb_cor_id.txt
     ```
 - Arguements explanationL
     - `--img` path to aligned 360 image
