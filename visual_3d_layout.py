@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.ndimage import map_coordinates
 
-import pptk
+import open3d
 from PIL import Image
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
@@ -100,7 +100,7 @@ if __name__ == '__main__':
                         help='Txt file containing layout corners (cor_id)')
     parser.add_argument('--camera_height', default=1.6, type=float,
                         help='Camera height in meter (not the viewer camera)')
-    parser.add_argument('--ppm', default=150, type=int,
+    parser.add_argument('--ppm', default=120, type=int,
                         help='Points per meter')
     parser.add_argument('--point_size', default=0.0025, type=int,
                         help='Point size')
@@ -148,5 +148,9 @@ if __name__ == '__main__':
 
     # Launch point cloud viewer
     print('# of points:', len(all_rgba))
-    viewer = pptk.viewer(all_xyz, all_rgba)
-    viewer.set(point_size=args.point_size, lookat=[0, 0, 0])
+    all_xyz = np.array(all_xyz)
+    all_rgb = np.array(all_rgba)[:, :3]
+    pcd = open3d.PointCloud()
+    pcd.points = open3d.Vector3dVector(all_xyz)
+    pcd.colors = open3d.Vector3dVector(all_rgb)
+    open3d.draw_geometries([pcd])

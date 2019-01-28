@@ -23,8 +23,7 @@ Use this repo, you can:
 - Pillow
 - torchfile
 - opencv-python>=3.1 (for pre-processing)
-- pptk (for layout 3D viewer)
-  - Workaround in this [issue](https://github.com/heremaps/pptk/issues/3) is required on my Ubuntu 18.04
+- open3d (for layout 3D viewer)
 - shapely (for layout 3D viewer)
 
 
