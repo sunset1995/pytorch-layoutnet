@@ -1,4 +1,7 @@
 # pytorch-layoutnet
+
+**News: Check out my new project [HorizonNet](https://github.com/sunset1995/HorizonNet) on this task**
+
 This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/1803.08999)  "LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image". [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
 What difference from official:
 - **Architecture**: Only joint *bounday branch* and *corner branch* are implemented as the paper states that "Training with 3D regressor has a small impact".
