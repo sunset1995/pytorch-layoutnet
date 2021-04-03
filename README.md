@@ -1,6 +1,7 @@
 # pytorch-layoutnet
 
-**News: Check out my new project [HorizonNet](https://github.com/sunset1995/HorizonNet) on this task**
+**News: Check out our new project [HoHoNet](https://github.com/sunset1995/HoHoNet) on this task and more!**\
+**News: Check out our new project [HorizonNet](https://github.com/sunset1995/HorizonNet) on this task.**
 
 This is an unofficial implementation of CVPR 18 [paper](https://arxiv.org/abs/1803.08999)  "LayoutNet: Reconstructing the 3D Room Layout from a Single RGB Image". [Official](https://github.com/zouchuhang/LayoutNet) layout dataset are all converted to `.png` and pretrained models are converted to pytorch `state-dict`.  
 What difference from official:
